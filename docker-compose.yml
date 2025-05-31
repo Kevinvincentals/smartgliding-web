@@ -1,13 +1,11 @@
 services:
   nextjs-app:
-    build:
-      context: .
-      dockerfile: Dockerfile
+    image: ghcr.io/kevinvincentals/smartgliding-web:latest
     ports:
       - "3000:3000"
     environment:
       - NODE_ENV=production
-      - DATABASE_URL=mongodb://mongodb:27017/fsk-dev?replicaSet=rs0
+      - DATABASE_URL=mongodb://mongodb:27017/smartgliding?replicaSet=rs0
       - JWT_SECRET=your-super-secret-key-change-this-in-production
       - PLANE_TRACKER_WS_URL=ws://smartgliding-ogn-backend:8765
       - WEBHOOK_API_KEY=secret
