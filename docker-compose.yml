@@ -40,7 +40,7 @@ services:
     ports:
       - "27017:27017"
     volumes:
-      - ./database:/data/db
+      - mongodb_data:/data/db
     restart: unless-stopped
     healthcheck:
       test: ["CMD","mongosh", "--eval", "db.adminCommand('hello')"]
@@ -86,6 +86,7 @@ services:
 #   postgres_data:
 
 volumes:
+  mongodb_data:
   ogn_data:
 
 
