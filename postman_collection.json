@@ -1,0 +1,897 @@
+{
+	"info": {
+		"_postman_id": "bdd8f8c3-d0a3-4e5c-9cf2-8e85a89c6e1f",
+		"name": "FSK Frontend API",
+		"description": "API endpoints for the FSK Frontend application",
+		"schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json"
+	},
+	"item": [
+		{
+			"name": "Auth",
+			"item": [
+				{
+					"name": "Signup",
+					"request": {
+						"method": "POST",
+						"header": [
+							{
+								"key": "Content-Type",
+								"value": "application/json"
+							}
+						],
+						"body": {
+							"mode": "raw",
+							"raw": "{\n    \"firstname\": \"John\",\n    \"lastname\": \"Doe\",\n    \"email\": \"john.doe@example.com\",\n    \"password\": \"password123\",\n    \"phone\": \"+1234567890\",\n    \"dsvu_id\": \"12345\"\n}"
+						},
+						"url": {
+							"raw": "{{base_url}}/api/auth/signup",
+							"host": [
+								"{{base_url}}"
+							],
+							"path": [
+								"api",
+								"auth",
+								"signup"
+							]
+						},
+						"description": "Register a new pilot account"
+					}
+				},
+				{
+					"name": "Signin",
+					"request": {
+						"method": "POST",
+						"header": [
+							{
+								"key": "Content-Type",
+								"value": "application/json"
+							}
+						],
+						"body": {
+							"mode": "raw",
+							"raw": "{\n    \"email\": \"john.doe@example.com\",\n    \"password\": \"password123\"\n}"
+						},
+						"url": {
+							"raw": "{{base_url}}/api/auth/signin",
+							"host": [
+								"{{base_url}}"
+							],
+							"path": [
+								"api",
+								"auth",
+								"signin"
+							]
+						},
+						"description": "Authenticate a pilot and get access tokens"
+					}
+				},
+				{
+					"name": "Refresh Token",
+					"request": {
+						"method": "POST",
+						"header": [
+							{
+								"key": "Content-Type",
+								"value": "application/json"
+							}
+						],
+						"body": {
+							"mode": "raw",
+							"raw": "{\n    \"refreshToken\": \"your-refresh-token\"\n}"
+						},
+						"url": {
+							"raw": "{{base_url}}/api/auth/refresh_token",
+							"host": [
+								"{{base_url}}"
+							],
+							"path": [
+								"api",
+								"auth",
+								"refresh_token"
+							]
+						},
+						"description": "Get a new access token using refresh token"
+					}
+				},
+				{
+					"name": "Verify Account",
+					"request": {
+						"method": "POST",
+						"header": [
+							{
+								"key": "Content-Type",
+								"value": "application/json"
+							}
+						],
+						"body": {
+							"mode": "raw",
+							"raw": "{\n    \"token\": \"verification-token\"\n}"
+						},
+						"url": {
+							"raw": "{{base_url}}/api/auth/verify",
+							"host": [
+								"{{base_url}}"
+							],
+							"path": [
+								"api",
+								"auth",
+								"verify"
+							]
+						},
+						"description": "Verify a pilot's account using verification token"
+					}
+				}
+			],
+			"description": "Authentication related endpoints"
+		},
+		{
+			"name": "Me",
+			"item": [
+				{
+					"name": "Get Current User",
+					"request": {
+						"method": "GET",
+						"header": [
+							{
+								"key": "Authorization",
+								"value": "Bearer {{access_token}}"
+							}
+						],
+						"url": {
+							"raw": "{{base_url}}/api/me",
+							"host": [
+								"{{base_url}}"
+							],
+							"path": [
+								"api",
+								"me"
+							]
+						},
+						"description": "Get the current authenticated user's profile"
+					}
+				}
+			],
+			"description": "Current user related endpoints"
+		},
+		{
+			"name": "Admin",
+			"item": [
+				{
+					"name": "Create Club",
+					"request": {
+						"method": "POST",
+						"header": [
+							{
+								"key": "Authorization",
+								"value": "Bearer {{access_token}}"
+							},
+							{
+								"key": "Content-Type",
+								"value": "application/json"
+							}
+						],
+						"body": {
+							"mode": "raw",
+							"raw": "{\n    \"name\": \"Flight Club Example\",\n    \"city\": \"Berlin\",\n    \"country\": \"Germany\"\n}"
+						},
+						"url": {
+							"raw": "{{base_url}}/api/admin/create_club",
+							"host": [
+								"{{base_url}}"
+							],
+							"path": [
+								"api",
+								"admin",
+								"create_club"
+							]
+						},
+						"description": "Create a new club (admin only)"
+					}
+				},
+				{
+					"name": "Assign Pilot",
+					"request": {
+						"method": "POST",
+						"header": [
+							{
+								"key": "Authorization",
+								"value": "Bearer {{access_token}}"
+							},
+							{
+								"key": "Content-Type",
+								"value": "application/json"
+							}
+						],
+						"body": {
+							"mode": "raw",
+							"raw": "{\n    \"clubId\": \"club-id-here\",\n    \"pilotId\": \"pilot-id-here\",\n    \"role\": \"MEMBER\"\n}"
+						},
+						"url": {
+							"raw": "{{base_url}}/api/admin/assign_pilot",
+							"host": [
+								"{{base_url}}"
+							],
+							"path": [
+								"api",
+								"admin",
+								"assign_pilot"
+							]
+						},
+						"description": "Assign a pilot to a club (admin only)"
+					}
+				},
+				{
+					"name": "Unassign Pilot",
+					"request": {
+						"method": "POST",
+						"header": [
+							{
+								"key": "Authorization",
+								"value": "Bearer {{access_token}}"
+							},
+							{
+								"key": "Content-Type",
+								"value": "application/json"
+							}
+						],
+						"body": {
+							"mode": "raw",
+							"raw": "{\n    \"clubId\": \"club-id-here\",\n    \"pilotId\": \"pilot-id-here\"\n}"
+						},
+						"url": {
+							"raw": "{{base_url}}/api/admin/unassign_pilot",
+							"host": [
+								"{{base_url}}"
+							],
+							"path": [
+								"api",
+								"admin",
+								"unassign_pilot"
+							]
+						},
+						"description": "Remove a pilot from a club (admin only)"
+					}
+				},
+				{
+					"name": "Update Role",
+					"request": {
+						"method": "POST",
+						"header": [
+							{
+								"key": "Authorization",
+								"value": "Bearer {{access_token}}"
+							},
+							{
+								"key": "Content-Type",
+								"value": "application/json"
+							}
+						],
+						"body": {
+							"mode": "raw",
+							"raw": "{\n    \"clubId\": \"club-id-here\",\n    \"pilotId\": \"pilot-id-here\",\n    \"role\": \"ADMIN\"\n}"
+						},
+						"url": {
+							"raw": "{{base_url}}/api/admin/update_role",
+							"host": [
+								"{{base_url}}"
+							],
+							"path": [
+								"api",
+								"admin",
+								"update_role"
+							]
+						},
+						"description": "Update a pilot's role in a club (admin only)"
+					}
+				},
+				{
+					"name": "Delete Club",
+					"request": {
+						"method": "DELETE",
+						"header": [
+							{
+								"key": "Authorization",
+								"value": "Bearer {{access_token}}"
+							}
+						],
+						"url": {
+							"raw": "{{base_url}}/api/admin/delete_club?clubId=club-id-here",
+							"host": [
+								"{{base_url}}"
+							],
+							"path": [
+								"api",
+								"admin",
+								"delete_club"
+							],
+							"query": [
+								{
+									"key": "clubId",
+									"value": "club-id-here"
+								}
+							]
+						},
+						"description": "Delete a club (admin only)"
+					}
+				}
+			],
+			"description": "Admin-only endpoints"
+		},
+		{
+			"name": "Club Admin",
+			"item": [
+				{
+					"name": "Create Pilot",
+					"request": {
+						"method": "POST",
+						"header": [
+							{
+								"key": "Authorization",
+								"value": "Bearer {{access_token}}"
+							},
+							{
+								"key": "Content-Type",
+								"value": "application/json"
+							}
+						],
+						"body": {
+							"mode": "raw",
+							"raw": "{\n    \"clubId\": \"club-id-here\",\n    \"firstname\": \"Jane\",\n    \"lastname\": \"Doe\",\n    \"email\": \"jane.doe@example.com\",\n    \"phone\": \"+1234567890\",\n    \"dsvu_id\": \"67890\",\n    \"role\": \"MEMBER\"\n}"
+						},
+						"url": {
+							"raw": "{{base_url}}/api/club/admin/create_pilot",
+							"host": [
+								"{{base_url}}"
+							],
+							"path": [
+								"api",
+								"club",
+								"admin",
+								"create_pilot"
+							]
+						},
+						"description": "Create a new pilot in a club (club admin only)"
+					}
+				},
+				{
+					"name": "Get Pilots",
+					"request": {
+						"method": "GET",
+						"header": [
+							{
+								"key": "Authorization",
+								"value": "Bearer {{access_token}}"
+							}
+						],
+						"url": {
+							"raw": "{{base_url}}/api/club/admin/get_pilots?clubId=club-id-here",
+							"host": [
+								"{{base_url}}"
+							],
+							"path": [
+								"api",
+								"club",
+								"admin",
+								"get_pilots"
+							],
+							"query": [
+								{
+									"key": "clubId",
+									"value": "club-id-here"
+								}
+							]
+						},
+						"description": "Get all pilots in a club (club admin only)"
+					}
+				},
+				{
+					"name": "Unassign Pilot",
+					"request": {
+						"method": "POST",
+						"header": [
+							{
+								"key": "Authorization",
+								"value": "Bearer {{access_token}}"
+							},
+							{
+								"key": "Content-Type",
+								"value": "application/json"
+							}
+						],
+						"body": {
+							"mode": "raw",
+							"raw": "{\n    \"clubId\": \"club-id-here\",\n    \"pilotId\": \"pilot-id-here\"\n}"
+						},
+						"url": {
+							"raw": "{{base_url}}/api/club/admin/unassign_pilot",
+							"host": [
+								"{{base_url}}"
+							],
+							"path": [
+								"api",
+								"club",
+								"admin",
+								"unassign_pilot"
+							]
+						},
+						"description": "Remove a pilot from a club (club admin only)"
+					}
+				},
+				{
+					"name": "Update Role",
+					"request": {
+						"method": "POST",
+						"header": [
+							{
+								"key": "Authorization",
+								"value": "Bearer {{access_token}}"
+							},
+							{
+								"key": "Content-Type",
+								"value": "application/json"
+							}
+						],
+						"body": {
+							"mode": "raw",
+							"raw": "{\n    \"clubId\": \"club-id-here\",\n    \"pilotId\": \"pilot-id-here\",\n    \"role\": \"ADMIN\"\n}"
+						},
+						"url": {
+							"raw": "{{base_url}}/api/club/admin/update_role",
+							"host": [
+								"{{base_url}}"
+							],
+							"path": [
+								"api",
+								"club",
+								"admin",
+								"update_role"
+							]
+						},
+						"description": "Update a pilot's role in a club (club admin only)"
+					}
+				},
+				{
+					"name": "Create Plane",
+					"request": {
+						"method": "POST",
+						"header": [
+							{
+								"key": "Authorization",
+								"value": "Bearer {{access_token}}"
+							},
+							{
+								"key": "Content-Type",
+								"value": "application/json"
+							}
+						],
+						"body": {
+							"mode": "raw",
+							"raw": "{\n    \"clubId\": \"club-id-here\",\n    \"call_sign\": \"D-ABCD\",\n    \"type\": \"ASK 21\",\n    \"seats\": 2,\n    \"is_motorized\": false\n}"
+						},
+						"url": {
+							"raw": "{{base_url}}/api/club/admin/create_plane",
+							"host": [
+								"{{base_url}}"
+							],
+							"path": [
+								"api",
+								"club",
+								"admin",
+								"create_plane"
+							]
+						},
+						"description": "Create a new plane in a club (club admin only)"
+					}
+				},
+				{
+					"name": "Get Planes",
+					"request": {
+						"method": "GET",
+						"header": [
+							{
+								"key": "Authorization",
+								"value": "Bearer {{access_token}}"
+							}
+						],
+						"url": {
+							"raw": "{{base_url}}/api/club/admin/get_planes?clubId=club-id-here",
+							"host": [
+								"{{base_url}}"
+							],
+							"path": [
+								"api",
+								"club",
+								"admin",
+								"get_planes"
+							],
+							"query": [
+								{
+									"key": "clubId",
+									"value": "club-id-here"
+								}
+							]
+						},
+						"description": "Get all planes in a club (club admin only)"
+					}
+				},
+				{
+					"name": "Get Plane",
+					"request": {
+						"method": "GET",
+						"header": [
+							{
+								"key": "Authorization",
+								"value": "Bearer {{access_token}}"
+							}
+						],
+						"url": {
+							"raw": "{{base_url}}/api/club/admin/get_plane?planeId=plane-id-here",
+							"host": [
+								"{{base_url}}"
+							],
+							"path": [
+								"api",
+								"club",
+								"admin",
+								"get_plane"
+							],
+							"query": [
+								{
+									"key": "planeId",
+									"value": "plane-id-here"
+								}
+							]
+						},
+						"description": "Get details of a specific plane (club admin only)"
+					}
+				},
+				{
+					"name": "Update Plane",
+					"request": {
+						"method": "PUT",
+						"header": [
+							{
+								"key": "Authorization",
+								"value": "Bearer {{access_token}}"
+							},
+							{
+								"key": "Content-Type",
+								"value": "application/json"
+							}
+						],
+						"body": {
+							"mode": "raw",
+							"raw": "{\n    \"planeId\": \"plane-id-here\",\n    \"call_sign\": \"D-EFGH\",\n    \"type\": \"ASK 21\",\n    \"seats\": 2,\n    \"is_motorized\": false\n}"
+						},
+						"url": {
+							"raw": "{{base_url}}/api/club/admin/update_plane",
+							"host": [
+								"{{base_url}}"
+							],
+							"path": [
+								"api",
+								"club",
+								"admin",
+								"update_plane"
+							]
+						},
+						"description": "Update a plane's details (club admin only)"
+					}
+				},
+				{
+					"name": "Delete Plane",
+					"request": {
+						"method": "DELETE",
+						"header": [
+							{
+								"key": "Authorization",
+								"value": "Bearer {{access_token}}"
+							}
+						],
+						"url": {
+							"raw": "{{base_url}}/api/club/admin/delete_plane?planeId=plane-id-here",
+							"host": [
+								"{{base_url}}"
+							],
+							"path": [
+								"api",
+								"club",
+								"admin",
+								"delete_plane"
+							],
+							"query": [
+								{
+									"key": "planeId",
+									"value": "plane-id-here"
+								}
+							]
+						},
+						"description": "Delete a plane (club admin only)"
+					}
+				}
+			],
+			"description": "Club administration endpoints"
+		},
+		{
+			"name": "Webhooks",
+			"item": [
+				{
+					"name": "Sync Glider Database",
+					"request": {
+						"method": "GET",
+						"header": [],
+						"url": {
+							"raw": "{{base_url}}/api/webhooks/sync-glider-db",
+							"host": [
+								"{{base_url}}"
+							],
+							"path": [
+								"api",
+								"webhooks",
+								"sync-glider-db"
+							]
+						},
+						"description": "Sync the glider database from external source"
+					}
+				},
+				{
+					"name": "Flight - Test Hook",
+					"request": {
+						"method": "POST",
+						"header": [
+							{
+								"key": "Content-Type",
+								"value": "application/json"
+							},
+							{
+								"key": "X-Api-Key",
+								"value": "secret"
+							}
+						],
+						"body": {
+							"mode": "raw",
+							"raw": "{\n  \"type\": \"testhook\",\n  \"origin\": \"igcd v0.2.2\",\n  \"config\": {\n    \"active\": true,\n    \"url\": \"http://127.0.0.1:8080\",\n    \"headers\": {\n      \"Whatever\": \"\",\n      \"X-Api-Key\": \"secret\"\n    },\n    \"airfields\": [\"LFNL\"],\n    \"triggers\": {\n      \"landing\": true,\n      \"takeoff\": true,\n      \"udlanding\": true,\n      \"udtakeoff\": true\n    }\n  }\n}"
+						},
+						"url": {
+							"raw": "{{base_url}}/api/webhooks/flights",
+							"host": [
+								"{{base_url}}"
+							],
+							"path": [
+								"api",
+								"webhooks",
+								"flights"
+							]
+						},
+						"description": "Test hook for flight webhook configuration"
+					}
+				},
+				{
+					"name": "Flight - Takeoff",
+					"request": {
+						"method": "POST",
+						"header": [
+							{
+								"key": "Content-Type",
+								"value": "application/json"
+							},
+							{
+								"key": "X-Api-Key",
+								"value": "secret"
+							}
+						],
+						"body": {
+							"mode": "raw",
+							"raw": "{\n  \"type\": \"takeoff\",\n  \"origin\": \"igcd v0.2.2\",\n  \"airfield\": \"LFNL\",\n  \"id\": \"DDB2AB\"\n}"
+						},
+						"url": {
+							"raw": "{{base_url}}/api/webhooks/flights",
+							"host": [
+								"{{base_url}}"
+							],
+							"path": [
+								"api",
+								"webhooks",
+								"flights"
+							]
+						},
+						"description": "Webhook for aircraft takeoff events"
+					}
+				},
+				{
+					"name": "Flight - Landing",
+					"request": {
+						"method": "POST",
+						"header": [
+							{
+								"key": "Content-Type",
+								"value": "application/json"
+							},
+							{
+								"key": "X-Api-Key",
+								"value": "secret"
+							}
+						],
+						"body": {
+							"mode": "raw",
+							"raw": "{\n  \"type\": \"landing\",\n  \"origin\": \"igcd v0.2.2\",\n  \"airfield\": \"LFNL\",\n  \"id\": \"DDB2AB\"\n}"
+						},
+						"url": {
+							"raw": "{{base_url}}/api/webhooks/flights",
+							"host": [
+								"{{base_url}}"
+							],
+							"path": [
+								"api",
+								"webhooks",
+								"flights"
+							]
+						},
+						"description": "Webhook for aircraft landing events"
+					}
+				},
+				{
+					"name": "Flight - Undeclared Takeoff",
+					"request": {
+						"method": "POST",
+						"header": [
+							{
+								"key": "Content-Type",
+								"value": "application/json"
+							},
+							{
+								"key": "X-Api-Key",
+								"value": "secret"
+							}
+						],
+						"body": {
+							"mode": "raw",
+							"raw": "{\n  \"type\": \"udtakeoff\",\n  \"origin\": \"igcd v0.2.2\",\n  \"airfield\": \"LFNL\",\n  \"id\": \"XXXXXX\"\n}"
+						},
+						"url": {
+							"raw": "{{base_url}}/api/webhooks/flights",
+							"host": [
+								"{{base_url}}"
+							],
+							"path": [
+								"api",
+								"webhooks",
+								"flights"
+							]
+						},
+						"description": "Webhook for undeclared aircraft takeoff events"
+					}
+				},
+				{
+					"name": "Flight - Undeclared Landing",
+					"request": {
+						"method": "POST",
+						"header": [
+							{
+								"key": "Content-Type",
+								"value": "application/json"
+							},
+							{
+								"key": "X-Api-Key",
+								"value": "secret"
+							}
+						],
+						"body": {
+							"mode": "raw",
+							"raw": "{\n  \"type\": \"udlanding\",\n  \"origin\": \"igcd v0.2.2\",\n  \"airfield\": \"LFNL\",\n  \"id\": \"XXXXXX\"\n}"
+						},
+						"url": {
+							"raw": "{{base_url}}/api/webhooks/flights",
+							"host": [
+								"{{base_url}}"
+							],
+							"path": [
+								"api",
+								"webhooks",
+								"flights"
+							]
+						},
+						"description": "Webhook for undeclared aircraft landing events"
+					}
+				}
+			],
+			"description": "Webhooks for flight tracking and data synchronization"
+		},
+		{
+			"name": "Tablet",
+			"item": [
+				{
+					"name": "Fetch Today's Flights",
+					"request": {
+						"method": "GET",
+						"header": [],
+						"url": {
+							"raw": "{{base_url}}/api/tablet/fetch_flights",
+							"host": [
+								"{{base_url}}"
+							],
+							"path": [
+								"api",
+								"tablet",
+								"fetch_flights"
+							],
+							"query": [
+								{
+									"key": "clubId",
+									"value": "67ed84dfd7fe1ae16aecc612",
+									"description": "Default club ID is used if not provided"
+								},
+								{
+									"key": "airfield",
+									"value": "EKFS",
+									"description": "Optional airfield filter",
+									"disabled": true
+								}
+							]
+						},
+						"description": "Fetch all flights for today for a specific club, including those still in the air"
+					}
+				},
+				{
+					"name": "Fetch Club Pilots",
+					"request": {
+						"method": "GET",
+						"header": [],
+						"url": {
+							"raw": "{{base_url}}/api/tablet/fetch_pilots",
+							"host": [
+								"{{base_url}}"
+							],
+							"path": [
+								"api",
+								"tablet",
+								"fetch_pilots"
+							],
+							"query": [
+								{
+									"key": "clubId",
+									"value": "67ed84dfd7fe1ae16aecc612",
+									"description": "Default club ID is used if not provided"
+								}
+							]
+						},
+						"description": "Fetch all active pilots for a specific club"
+					}
+				}
+			],
+			"description": "Endpoints specifically designed for tablet applications"
+		}
+	],
+	"event": [
+		{
+			"listen": "prerequest",
+			"script": {
+				"type": "text/javascript",
+				"exec": [
+					""
+				]
+			}
+		},
+		{
+			"listen": "test",
+			"script": {
+				"type": "text/javascript",
+				"exec": [
+					""
+				]
+			}
+		}
+	],
+	"variable": [
+		{
+			"key": "base_url",
+			"value": "http://localhost:3000",
+			"type": "string"
+		},
+		{
+			"key": "access_token",
+			"value": "",
+			"type": "string"
+		}
+	]
+} 

@@ -1,0 +1,77 @@
+services:
+  nextjs-app:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    ports:
+      - "3000:3000"
+    environment:
+      - NODE_ENV=production
+      - DATABASE_URL=mongodb://mongodb:27017/fsk-dev?replicaSet=rs0
+      - JWT_SECRET=your-super-secret-key-change-this-in-production
+      - PLANE_TRACKER_WS_URL=ws://smartgliding-ogn-backend:8765
+      - WEBHOOK_API_KEY=secret
+    depends_on:
+      - mongodb
+    restart: unless-stopped
+
+  smartgliding-ogn-backend:
+    image: ghcr.io/kevinvincentals/smartgliding-ogn-backend:latest
+    container_name: smartgliding-ogn-backend
+    ports:
+      - "8765:8765"
+    volumes:
+      - ogn_data:/data
+    environment:
+      - DATABASE_URL=mongodb://mongodb:27017/fsk-dev?replicaSet=rs0
+      - WEBHOOK_URL=http://nextjs-app:3000/api/webhooks/flights
+      - WEBHOOK_API_KEY=secret
+      - WEBHOOK_ENABLED=true
+    depends_on:
+      - mongodb
+      - nextjs-app
+    restart: unless-stopped
+
+  mongodb:
+    image: mongo:7
+    command: ["--replSet", "rs0", "--bind_ip_all", "--noauth"]
+    ports:
+      - "27017:27017"
+    volumes:
+      - mongodb_data:/data/db
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD","mongosh", "--eval", "db.adminCommand('hello')"]
+      interval: 5s
+      timeout: 2s
+      retries: 10
+
+  mongodb-setup:
+    image: mongo:7
+    depends_on:
+      mongodb:
+        condition: service_healthy
+    command: >
+      mongosh --host mongodb:27017 --eval "
+      try {
+        rs.status();
+        print('Replica set already initialized');
+      } catch (err) {
+        print('Initializing replica set...');
+        rs.initiate({
+          _id: 'rs0',
+          members: [{ _id: 0, host: 'mongodb:27017' }]
+        });
+        print('Replica set initialized');
+      }
+      "
+    restart: "no"
+
+# volumes:
+#   postgres_data:
+
+volumes:
+  mongodb_data:
+  ogn_data:
+
+

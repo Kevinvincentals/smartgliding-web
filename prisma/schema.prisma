@@ -1,0 +1,282 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "mongodb"
+  url      = env("DATABASE_URL")
+}
+
+enum PilotStatus {
+  ACTIVE
+  INACTIVE
+  PENDING
+}
+
+enum PilotMembership {
+  BASIC
+  PREMIUM
+  VIP
+}
+
+enum ClubRole {
+  ADMIN
+  USER
+}
+
+enum FlightStatus {
+  PENDING
+  INFLIGHT
+  LANDED
+  COMPLETED
+}
+
+model Club {
+  id           String          @id @default(auto()) @map("_id") @db.ObjectId
+  name         String
+  street       String
+  zip          String
+  city         String
+  country      String
+  vat          String?
+  website      String?
+  email        String?
+  contactName  String?
+  contactPhone String?
+  club_pin     Int             @default(0)
+  instructor_pin Int           @default(0)
+  homefield    String?
+  status       String          @default("active")
+  pilots       ClubPilot[]
+  planes       Plane[]
+  flightLogs   FlightLogbook[] @relation("ClubFlights")
+  dailyInfo    DailyInfo[]     @relation("ClubDailyInfo")
+  dailyPrivatePlanes DailyPrivatePlanes[]
+  createdBy    Pilot           @relation("ClubCreator", fields: [createdById], references: [id], onDelete: NoAction, onUpdate: NoAction)
+  createdById  String          @db.ObjectId
+  createdAt    DateTime        @default(now())
+  updatedAt    DateTime        @updatedAt
+
+  @@map("clubs")
+}
+
+model Pilot {
+  id                 String          @id @default(auto()) @map("_id") @db.ObjectId
+  firstname          String
+  lastname           String
+  email              String          @unique
+  password           String
+  phone              String?
+  status             PilotStatus     @default(PENDING)
+  membership         PilotMembership @default(BASIC)
+  is_admin           Boolean         @default(false)
+  flight_time        Int             @default(0)  // total flight time in minutes
+  flight_starts      Int             @default(0)  // total number of takeoffs as any pilot
+  dsvu_id            String?
+  clubs              ClubPilot[]
+  createdClubs       Club[]          @relation("ClubCreator")
+  createdPlanes      Plane[]         @relation("PlaneCreator")
+  pilotFlights1      FlightLogbook[] @relation("PilotOneFlights")
+  pilotFlights2      FlightLogbook[] @relation("PilotTwoFlights")
+  trafficLeadingDays DailyInfo[]     @relation("TrafficLeader")
+  trafficLeadingDays2 DailyInfo[]    @relation("TrafficLeader2")
+  towingDays         DailyInfo[]     @relation("TowPerson")
+  towingDays2        DailyInfo[]     @relation("TowPerson2")
+  privatePlanesPilot1 DailyPrivatePlanes[] @relation("PrivatePlanePilot1")
+  privatePlanesPilot2 DailyPrivatePlanes[] @relation("PrivatePlanePilot2")
+  // DSVU School evaluation relations
+  flightEvaluations  DkDsvuFlightEvaluation[] // Flight evaluations as student
+  instructorFlightEvaluations DkDsvuFlightEvaluation[] @relation("FlightEvaluations") // Flight evaluations given as instructor
+  createdAt          DateTime        @default(now())
+  updatedAt          DateTime        @updatedAt
+
+  @@map("pilots")
+}
+
+model ClubPilot {
+  id        String   @id @default(auto()) @map("_id") @db.ObjectId
+  pilot     Pilot    @relation(fields: [pilotId], references: [id], onDelete: Cascade)
+  pilotId   String   @db.ObjectId
+  club      Club     @relation(fields: [clubId], references: [id], onDelete: Cascade)
+  clubId    String   @db.ObjectId
+  role      ClubRole @default(USER)
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@unique([pilotId, clubId])
+  @@map("club_pilots")
+}
+
+model Plane {
+  id              String          @id @default(auto()) @map("_id") @db.ObjectId
+  registration_id String          @unique
+  flarm_id        String?
+  competition_id  String?
+  type            String
+  is_twoseater    Boolean         @default(false)
+  is_guest        Boolean         @default(false)  // Flag to mark planes from OGN database or manually entered
+  flight_time     Int             @default(0) // in minutes
+  starts          Int             @default(0) // count of takeoffs
+  year_produced   Int?
+  notes           String?
+  club            Club            @relation(fields: [clubId], references: [id], onDelete: Cascade)
+  clubId          String          @db.ObjectId
+  createdBy       Pilot           @relation("PlaneCreator", fields: [createdById], references: [id], onDelete: NoAction, onUpdate: NoAction)
+  createdById     String          @db.ObjectId
+  flightLogs      FlightLogbook[] @relation("PlaneFlights")
+  dailyPrivatePlanes DailyPrivatePlanes[]
+  createdAt       DateTime        @default(now())
+  updatedAt       DateTime        @updatedAt
+
+  @@map("planes")
+}
+
+model FlightLogbook {
+  id                 String       @id @default(auto()) @map("_id") @db.ObjectId
+  flarm_id           String
+  registration       String?
+  type               String?
+  competition_number String?
+  pilot1             Pilot?       @relation("PilotOneFlights", fields: [pilot1Id], references: [id], onDelete: SetNull)
+  pilot1Id           String?      @db.ObjectId
+  guest_pilot1_name  String? // For storing guest pilot name without creating a pilot record
+  pilot2             Pilot?       @relation("PilotTwoFlights", fields: [pilot2Id], references: [id], onDelete: SetNull)
+  pilot2Id           String?      @db.ObjectId
+  guest_pilot2_name  String? // For storing guest co-pilot name without creating a pilot record
+  is_school_flight   Boolean?
+  launch_method      String?      @default("S") // S=Spilstart, M=Selvstart, F=Flyslæb
+  plane              Plane?       @relation("PlaneFlights", fields: [planeId], references: [id], onDelete: SetNull)
+  planeId            String?      @db.ObjectId
+  club               Club?        @relation("ClubFlights", fields: [clubId], references: [id], onDelete: SetNull)
+  clubId             String?      @db.ObjectId
+  takeoff_time       DateTime?
+  landing_time       DateTime?
+  flight_duration    Int? // in minutes
+  flight_distance    Float? // in kilometers
+  max_altitude       Float? // in meters
+  max_speed          Float? // in km/h
+  takeoff_airfield   String?
+  landing_airfield   String?
+  notes              String? // Flight notes
+  status             FlightStatus @default(PENDING)
+  deleted            Boolean      @default(false)
+  createdAt          DateTime     @default(now())
+  updatedAt          DateTime     @updatedAt
+  FlarmData          FlarmData[]
+  // DSVU School evaluation relation
+  schoolEvaluations  DkDsvuFlightEvaluation[]
+
+  @@map("flight_logbook")
+}
+
+model DailyInfo {
+  id              String   @id @default(auto()) @map("_id") @db.ObjectId
+  club            Club     @relation("ClubDailyInfo", fields: [clubId], references: [id], onDelete: Cascade)
+  clubId          String   @db.ObjectId
+  flightCount     Int      @default(0)
+  trafficLeader   Pilot?   @relation("TrafficLeader", fields: [trafficLeaderId], references: [id], onDelete: SetNull)
+  trafficLeaderId String?  @db.ObjectId
+  trafficLeader2   Pilot?   @relation("TrafficLeader2", fields: [trafficLeaderId2], references: [id], onDelete: SetNull)
+  trafficLeaderId2 String?  @db.ObjectId
+  towPerson       Pilot?   @relation("TowPerson", fields: [towPersonId], references: [id], onDelete: SetNull)
+  towPersonId     String?  @db.ObjectId
+  towPerson2       Pilot?   @relation("TowPerson2", fields: [towPersonId2], references: [id], onDelete: SetNull)
+  towPersonId2     String?  @db.ObjectId
+  date            DateTime @default(now())
+  createdAt       DateTime @default(now())
+  updatedAt       DateTime @updatedAt
+
+  @@unique([clubId, date])
+  @@map("daily_info")
+}
+
+model FlarmData {
+  id                String         @id @default(auto()) @map("_id") @db.ObjectId
+  aircraft_id       String
+  timestamp         DateTime
+  latitude          Float
+  longitude         Float
+  altitude          Float?
+  track             Float?
+  ground_speed      Float?
+  climb_rate        Float?
+  turn_rate         Float?
+  aircraft_model    String?
+  registration      String?
+  flight_logbook    FlightLogbook? @relation(fields: [flight_logbook_id], references: [id])
+  flight_logbook_id String?        @db.ObjectId
+  mongodb_timestamp DateTime       @default(now())
+
+  @@index([aircraft_id, mongodb_timestamp(sort: Desc)])
+  @@map("flarm_data")
+}
+
+model DailyPrivatePlanes {
+  id           String   @id @default(auto()) @map("_id") @db.ObjectId
+  plane        Plane?   @relation(fields: [planeId], references: [id], onDelete: SetNull)
+  planeId      String?  @db.ObjectId
+  club         Club     @relation(fields: [clubId], references: [id], onDelete: Cascade)
+  clubId       String   @db.ObjectId
+  date         DateTime // Date only (start of day in UTC)
+  pilot1       Pilot?   @relation("PrivatePlanePilot1", fields: [pilot1Id], references: [id], onDelete: SetNull)
+  pilot1Id     String?  @db.ObjectId
+  pilot2       Pilot?   @relation("PrivatePlanePilot2", fields: [pilot2Id], references: [id], onDelete: SetNull)
+  pilot2Id     String?  @db.ObjectId
+  guest_pilot1_name String? // For guest pilots
+  guest_pilot2_name String? // For guest co-pilots
+  isSchoolFlight    Boolean  @default(false)
+  launchMethod      String   @default("S") // S=Spilstart, M=Selvstart, F=Flyslæb
+  startField        String
+  createdAt    DateTime @default(now())
+  updatedAt    DateTime @updatedAt
+
+  @@unique([planeId, clubId, date])
+  @@map("daily_private_planes")
+}
+
+// Danish DSVU Schooling Catalog Models
+model DkDsvuSchoolCatalog {
+  id          String   @id @default(auto()) @map("_id") @db.ObjectId
+  moduleId    String   @unique // e.g. "G-1", "G-2", "U-14", etc.
+  titel       String   // Module title e.g. "Fortrolighed med svæveflyet"
+  exercises   Json     // Array of exercise objects with unique IDs: [{id: "g1_ex_001", text: "...", order: 0}]
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  @@map("dk_dsvu_school_catalog")
+}
+
+model DkDsvuSchoolRequirements {
+  id                          String   @id @default(auto()) @map("_id") @db.ObjectId
+  minimum_starter             Int      @default(45)      // Minimum number of starts
+  minimum_flyvetimer          Int      @default(15)      // Minimum flight hours
+  minimum_to_sædet_skoling    Int      @default(10)      // Minimum two-seat training hours
+  minimum_solo_flyvning       Int      @default(2)       // Minimum solo flight hours
+  createdAt                   DateTime @default(now())
+  updatedAt                   DateTime @updatedAt
+
+  @@map("dk_dsvu_school_requirements")
+}
+
+// Model to track specific flight evaluations
+model DkDsvuFlightEvaluation {
+  id          String        @id @default(auto()) @map("_id") @db.ObjectId
+  flight      FlightLogbook @relation(fields: [flightId], references: [id], onDelete: Cascade)
+  flightId    String        @db.ObjectId
+  pilot       Pilot         @relation(fields: [pilotId], references: [id], onDelete: Cascade)
+  pilotId     String        @db.ObjectId
+  exerciseId  String        // e.g., "g1_ex_001", "g2_ex_002", etc.
+  moduleId    String        // e.g., "G-1", "G-2", "U-14", etc.
+  grade       Int           // 1, 2, or 3
+  // 3: Bestået = Manøvren udføres selvstændigt og tilfredsstillende
+  // 2: Endnu ej bestået = Manøvren udføres med mundtlige korrektioner fra instruktøren  
+  // 1: Endnu ej bestået
+  evaluatedBy Pilot         @relation("FlightEvaluations", fields: [evaluatedById], references: [id], onDelete: Cascade)
+  evaluatedById String      @db.ObjectId
+  notes       String?       // Optional notes from instructor
+  createdAt   DateTime      @default(now())
+  updatedAt   DateTime      @updatedAt
+
+  @@unique([flightId, pilotId, exerciseId])
+  @@map("dk_dsvu_flight_evaluations")
+}
