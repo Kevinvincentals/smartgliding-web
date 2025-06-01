@@ -1,8 +1,4 @@
 // Docker Bake configuration for multi-platform builds
-variable "TAG" {
-  default = "latest"
-}
-
 variable "REGISTRY" {
   default = "ghcr.io/kevinvincentals/smartgliding-web"
 }
@@ -14,8 +10,8 @@ group "default" {
 target "smartgliding-web" {
   dockerfile = "Dockerfile"
   tags = [
-    "${REGISTRY}:${TAG}",
-    "${REGISTRY}:latest"
+    "${REGISTRY}:latest",
+    "${REGISTRY}:main"
   ]
   platforms = [
     "linux/amd64",

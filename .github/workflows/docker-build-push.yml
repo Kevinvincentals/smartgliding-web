@@ -41,27 +41,12 @@ jobs:
         username: ${{ github.actor }}
         password: ${{ secrets.GITHUB_TOKEN }}
 
-    - name: Extract metadata (tags, labels) for Docker
-      id: meta
-      uses: docker/metadata-action@v5
-      with:
-        images: ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}
-        tags: |
-          type=ref,event=branch
-          type=ref,event=pr
-          type=raw,value=latest,enable={{is_default_branch}}
-
     - name: Build and push with Bake
       uses: docker/bake-action@v4
+      env:
+        REGISTRY: ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}
       with:
         # Push only on main branch pushes (not PRs)
         push: ${{ github.event_name != 'pull_request' }}
         # Use our bake configuration file
-        files: ./docker-bake.hcl
-        # Pass dynamic values to bake
-        set: |
-          smartgliding-web.tags=${{ steps.meta.outputs.tags }}
-          smartgliding-web.labels=${{ steps.meta.outputs.labels }}
-        # Override registry from environment
-        env: |
-          REGISTRY=${{ env.REGISTRY }}/${{ github.repository_owner }}/smartgliding-web 
+        files: ./docker-bake.hcl 
