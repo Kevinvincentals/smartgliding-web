@@ -157,12 +157,13 @@ export async function GET(request: NextRequest): Promise<NextResponse<PlanesApiR
     
     // Process planes with guest detection heuristics
     const processedPlanes: PlaneWithMetadata[] = allClubPlanesDb.map(plane => {
-      // Heuristic to identify guest aircraft
+      // Primary: Use the explicit is_guest field from database
+      // Secondary: Heuristics for planes that might be from OGN registry or legacy data
       const isLikelyGuest = 
-        plane.is_guest ||
+        plane.is_guest || // Trust the database field first
         plane.type?.includes('OGN Registry') || 
-        plane.registration_id?.startsWith('GUEST-') ||
-        (plane.createdAt && new Date(plane.createdAt) >= threeDaysAgo);
+        plane.registration_id?.startsWith('GUEST-');
+        // Removed the createdAt heuristic - recently added planes aren't necessarily guests
       
       // Keep recent guest planes but filter out old ones unless includeGuests is true
       const isRecentEnough = queryParams.includeGuests || 
