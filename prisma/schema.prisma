@@ -280,3 +280,33 @@ model DkDsvuFlightEvaluation {
   @@unique([flightId, pilotId, exerciseId])
   @@map("dk_dsvu_flight_evaluations")
 }
+
+model DkAirfields {
+  id            String   @id @default(auto()) @map("_id") @db.ObjectId
+  ident         String   @unique // e.g. "DK-0003", "EKAC"
+  type          String   // small_airport, medium_airport, large_airport, heliport, seaplane_base
+  name          String   // Name of the airfield
+  municipality  String?  // Municipality name (nullable)
+  icao          String   // ICAO code
+  latitude_deg  Float    // Latitude in degrees
+  longitude_deg Float    // Longitude in degrees
+  createdAt     DateTime @default(now())
+  updatedAt     DateTime @updatedAt
+
+  @@map("dk_airfields")
+}
+
+model OgnDatabase {
+  id            String   @id @default(auto()) @map("_id") @db.ObjectId
+  deviceType    String   // 'F' = Flarm, 'O' = Other
+  deviceId      String   @unique // Hexadecimal device ID like '000000', 'DD4E35'
+  aircraftModel String?  // Aircraft model like 'HPH 304CZ-17', 'LS-6 18' (can be empty)
+  registration  String?  // Registration like 'OK-7777', 'OY-XRG', 'SE-TXD' (can be empty)
+  cn            String?  // Competition number like 'KN', 'G2', 'AC' (can be empty)
+  tracked       Boolean  // Y/N converted to boolean
+  identified    Boolean  // Y/N converted to boolean
+  createdAt     DateTime @default(now())
+  updatedAt     DateTime @updatedAt
+
+  @@map("ogn-database")
+}

@@ -1,17 +1,16 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { promises as fs } from 'fs';
-import path from 'path';
-import { parse } from 'csv-parse/sync';
+import { prisma } from '@/lib/prisma';
 
-// Define an interface for our record structure
+// Remove the CSV-related imports and interface
+// Define an interface for our record structure matching the database model
 interface OgnRecord {
-  type: string;
-  flarmID: string;
-  model: string;
-  registration: string;
-  competitionID: string;
-  tracked: string;
-  identified: string;
+  deviceType: string;
+  deviceId: string;
+  aircraftModel: string | null;
+  registration: string | null;
+  cn: string | null;
+  tracked: boolean;
+  identified: boolean;
 }
 
 /**
@@ -72,28 +71,45 @@ export async function GET(request: NextRequest): Promise<NextResponse<PlaneApiRe
     const normalizedQuery = query.trim().toUpperCase();
     const normalizedQueryNoHyphen = normalizedQuery.replace(/-/g, '');
     
-    // Read the CSV file
-    const filePath = path.join(process.cwd(), 'data/glider_database.csv');
-    const fileContents = await fs.readFile(filePath, 'utf8');
-    
-    // Parse CSV
-    const records = parse(fileContents, {
-      columns: ['type', 'flarmID', 'model', 'registration', 'competitionID', 'tracked', 'identified'],
-      skip_empty_lines: true,
-      trim: true,
-      relax_quotes: true,
-      skip_records_with_error: true,
-      comment: '#'
-    }) as OgnRecord[];
-    
-    // Helper function to clean record values
-    const cleanValue = (value: string | undefined): string => {
-      if (!value) return '';
-      return value.replace(/['"]+/g, '');
-    };
+    // Query the database instead of reading CSV
+    const records = await prisma.ognDatabase.findMany({
+      where: {
+        OR: [
+          {
+            registration: {
+              contains: normalizedQuery,
+              mode: 'insensitive'
+            }
+          },
+          {
+            registration: {
+              contains: normalizedQueryNoHyphen,
+              mode: 'insensitive'
+            }
+          },
+          {
+            cn: {
+              contains: normalizedQuery,
+              mode: 'insensitive'
+            }
+          },
+          {
+            cn: {
+              contains: normalizedQueryNoHyphen,
+              mode: 'insensitive'
+            }
+          }
+        ],
+        // Exclude paragliders (P), ultralights (U), and balloons (B)
+        deviceType: {
+          notIn: ['P', 'U', 'B']
+        }
+      },
+      take: 50 // Limit results
+    });
     
     // Helper function to check if a registration matches the search query
-    const isRegistrationMatch = (registration: string, query: string, queryNoHyphen: string): boolean => {
+    const isRegistrationMatch = (registration: string | null, query: string, queryNoHyphen: string): boolean => {
       if (!registration) return false;
       
       const regUpper = registration.toUpperCase();
@@ -108,14 +124,10 @@ export async function GET(request: NextRequest): Promise<NextResponse<PlaneApiRe
       return false;
     };
     
-    // Find matching records
+    // Filter and validate matching records
     const matchingRecords = records.filter((record: OgnRecord) => {
-      const type = cleanValue(record.type);
-      const registration = cleanValue(record.registration);
-      const competitionID = cleanValue(record.competitionID);
-      
-      // Exclude paragliders (P), ultralights (U), and balloons (B)
-      if (type === 'P' || type === 'U' || type === 'B') return false;
+      const registration = record.registration || '';
+      const competitionID = record.cn || '';
       
       // Check registration match
       if (isRegistrationMatch(registration, normalizedQuery, normalizedQueryNoHyphen)) return true;
@@ -139,8 +151,8 @@ export async function GET(request: NextRequest): Promise<NextResponse<PlaneApiRe
     
     // Sort matches: exact registration matches first, then others
     const sortedMatches = matchingRecords.sort((a, b) => {
-      const regA = cleanValue(a.registration).toUpperCase();
-      const regB = cleanValue(b.registration).toUpperCase();
+      const regA = (a.registration || '').toUpperCase();
+      const regB = (b.registration || '').toUpperCase();
       
       const exactMatchA = regA === normalizedQuery || regA.replace(/-/g, '') === normalizedQueryNoHyphen;
       const exactMatchB = regB === normalizedQuery || regB.replace(/-/g, '') === normalizedQueryNoHyphen;
@@ -161,19 +173,19 @@ export async function GET(request: NextRequest): Promise<NextResponse<PlaneApiRe
     // Get the best match for prefilling
     const bestMatch = sortedMatches[0];
     const bestMatchData = {
-      registration_id: cleanValue(bestMatch.registration),
-      type: cleanValue(bestMatch.model),
-      flarm_id: cleanValue(bestMatch.flarmID) || undefined,
-      competition_id: cleanValue(bestMatch.competitionID) || undefined,
-      is_twoseater: isTwoSeaterType(cleanValue(bestMatch.model))
+      registration_id: bestMatch.registration || '',
+      type: bestMatch.aircraftModel || '',
+      flarm_id: bestMatch.deviceId || undefined,
+      competition_id: bestMatch.cn || undefined,
+      is_twoseater: isTwoSeaterType(bestMatch.aircraftModel || '')
     };
     
     // Format suggestions (up to 5)
     const suggestions = sortedMatches.slice(0, 5).map((record: OgnRecord) => ({
-      registration_id: cleanValue(record.registration),
-      type: cleanValue(record.model),
-      flarm_id: cleanValue(record.flarmID) || undefined,
-      competition_id: cleanValue(record.competitionID) || undefined
+      registration_id: record.registration || '',
+      type: record.aircraftModel || '',
+      flarm_id: record.deviceId || undefined,
+      competition_id: record.cn || undefined
     }));
     
     return NextResponse.json<PlaneApiResponse>({
