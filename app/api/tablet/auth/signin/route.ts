@@ -81,8 +81,8 @@ export async function POST(request: NextRequest): Promise<NextResponse<AuthRespo
                              requestUrl.hostname.startsWith('10.') ||
                              requestUrl.hostname.startsWith('172.')
     
-    // Only use secure cookies if in production AND not accessing via local/internal IP
-    const useSecureCookies = isProduction && !isLocalOrInternal
+    // Temporarily disable secure cookies completely for troubleshooting
+    const useSecureCookies = false
     
     const accessTokenCookieName = process.env.TABLET_ACCESS_TOKEN_COOKIE_NAME || 'tablet-access-token'
     const refreshTokenCookieName = process.env.TABLET_REFRESH_TOKEN_COOKIE_NAME || 'tablet-refresh-token'
