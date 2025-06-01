@@ -10,7 +10,10 @@ services:
       - PLANE_TRACKER_WS_URL=ws://smartgliding-ogn-backend:8765
       - WEBHOOK_API_KEY=secret
     depends_on:
-      - mongodb
+      mongodb-setup:
+        condition: service_completed_successfully
+      smartgliding-ogn-backend:
+        condition: service_started
     restart: unless-stopped
     labels:
       - "com.centurylinklabs.watchtower.enable=true"
@@ -23,13 +26,13 @@ services:
     volumes:
       - ogn_data:/data
     environment:
-      - DATABASE_URL=mongodb://mongodb:27017/fsk-dev?replicaSet=rs0
+      - DATABASE_URL=mongodb://mongodb:27017/smartgliding?replicaSet=rs0
       - WEBHOOK_URL=http://nextjs-app:3000/api/webhooks/flights
       - WEBHOOK_API_KEY=secret
       - WEBHOOK_ENABLED=true
     depends_on:
-      - mongodb
-      - nextjs-app
+      mongodb-setup:
+        condition: service_completed_successfully
     restart: unless-stopped
     labels:
       - "com.centurylinklabs.watchtower.enable=true"
@@ -81,6 +84,11 @@ services:
       - WATCHTOWER_INCLUDE_RESTARTING=true
       - WATCHTOWER_LABEL_ENABLE=true   # Only monitor containers with watchtower labels
     command: --interval 3600 --cleanup
+    depends_on:
+      nextjs-app:
+        condition: service_started
+      smartgliding-ogn-backend:
+        condition: service_started
 
 volumes:
   ogn_data:
