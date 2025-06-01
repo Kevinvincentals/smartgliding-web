@@ -240,7 +240,7 @@ export async function GET(request: NextRequest): Promise<NextResponse<OgnDatabas
                  otherExactMatches.length === 0 ? [{
                 aircraftModel: {
                   contains: normalizedQuery,
-                  mode: 'insensitive'
+                  mode: 'insensitive' as const
                 }
               }] : [])
             ]

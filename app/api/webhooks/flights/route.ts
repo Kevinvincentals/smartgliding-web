@@ -257,9 +257,9 @@ async function handleFlightEvent(payload: z.infer<typeof flightEventSchema>) {
   if (!plane) {
     const gliderInfo = await getGliderByFlarmId(flarmId);
     if (gliderInfo) {
-      registration = gliderInfo.registration;
-      aircraftType = gliderInfo.aircraftModel;
-      competitionNumber = gliderInfo.competitionNumber;
+      registration = gliderInfo.registration || undefined;
+      aircraftType = gliderInfo.aircraftModel || undefined;
+      competitionNumber = gliderInfo.competitionNumber || undefined;
     }
   }
 
