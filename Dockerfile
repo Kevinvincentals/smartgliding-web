@@ -10,7 +10,9 @@ WORKDIR /app
 # Copy package files
 COPY package.json package-lock.json* ./
 # Install dependencies with legacy peer deps to handle conflicts
-RUN npm ci --legacy-peer-deps
+# Use npm ci with platform-specific optimizations
+RUN --mount=type=cache,target=/root/.npm \
+    npm ci --legacy-peer-deps --no-audit --no-fund
 
 # Rebuild the source code only when needed
 FROM base AS builder
@@ -21,8 +23,9 @@ COPY . .
 # Generate Prisma client
 RUN npx prisma generate
 
-# Build the application
-RUN npm run build --force
+# Build the application with build cache mount
+RUN --mount=type=cache,target=/app/.next/cache \
+    npm run build
 
 # Production image, copy all the files and run next
 FROM base AS runner

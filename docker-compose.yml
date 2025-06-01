@@ -1,7 +1,6 @@
 services:
   nextjs-app:
     image: ghcr.io/kevinvincentals/smartgliding-web:latest
-    platform: linux/arm64  # Specify ARM64 for Raspberry Pi compatibility
     ports:
       - "3000:3000"
     environment:
@@ -18,7 +17,6 @@ services:
 
   smartgliding-ogn-backend:
     image: ghcr.io/kevinvincentals/smartgliding-ogn-backend:latest
-    platform: linux/arm64  # Specify ARM64 for Raspberry Pi compatibility
     container_name: smartgliding-ogn-backend
     ports:
       - "8765:8765"
@@ -38,7 +36,6 @@ services:
 
   mongodb:
     image: mongo:7
-    platform: linux/arm64  # Specify ARM64 for Raspberry Pi compatibility
     command: ["--replSet", "rs0", "--bind_ip_all", "--noauth"]
     ports:
       - "27017:27017"
@@ -53,7 +50,6 @@ services:
 
   mongodb-setup:
     image: mongo:7
-    platform: linux/arm64  # Specify ARM64 for Raspberry Pi compatibility
     depends_on:
       mongodb:
         condition: service_healthy
@@ -75,7 +71,6 @@ services:
 
   watchtower:
     image: containrrr/watchtower:latest
-    platform: linux/arm64  # Specify ARM64 for Raspberry Pi compatibility
     container_name: watchtower
     restart: unless-stopped
     volumes:
