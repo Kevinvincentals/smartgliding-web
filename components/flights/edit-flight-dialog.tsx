@@ -693,7 +693,13 @@ export function EditFlightDialog({
     setCurrentNotes(newNotes);
     // Update the flight object with the new notes
     if (flight) {
-      flight.notes = newNotes;
+      const updatedFlight = {
+        ...flight,
+        notes: newNotes
+      };
+      
+      // Update the flight in the parent component so changes are reflected in the main list
+      onSave(updatedFlight);
     }
   };
 
