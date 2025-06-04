@@ -70,6 +70,7 @@ export function AddFlightDialog({
   // Add state for private plane functionality
   const [isPrivatePlane, setIsPrivatePlane] = useState(false)
   const [isLoadingPrivatePlanes, setIsLoadingPrivatePlanes] = useState(false)
+  const [privatePlaneAssignments, setPrivatePlaneAssignments] = useState<any[]>([])
   
   // Add refs for each combobox
   const aircraftComboboxRef = useRef<HTMLDivElement>(null);
@@ -121,11 +122,84 @@ export function AddFlightDialog({
       if (pilotsData.success && pilotsData.pilots) {
         setPilotOptions(pilotsData.pilots);
       }
+
+      // Fetch private plane assignments for today
+      const privatePlanesResponse = await fetch(`/api/tablet/private_planes`);
+      if (privatePlanesResponse.ok) {
+        const privatePlanesData = await privatePlanesResponse.json();
+        if (privatePlanesData.success && privatePlanesData.privatePlanes) {
+          setPrivatePlaneAssignments(privatePlanesData.privatePlanes);
+        }
+      }
     } catch (err) {
       console.error('Error fetching data:', err);
       setError('Failed to load necessary data. Please try again.');
     } finally {
       setIsDataLoading(false);
+    }
+  };
+
+  // Function to auto-fill pilot information for private planes
+  const autoFillPrivatePlaneInfo = (aircraft: Aircraft) => {
+    if (!aircraft || !aircraft.id) return;
+
+    // Find private plane assignment for this aircraft
+    const privateAssignment = privatePlaneAssignments.find(pp => pp.planeId === aircraft.id.toString());
+    
+    if (privateAssignment) {
+      console.log('Found private plane assignment:', privateAssignment);
+      
+      // Auto-fill pilot information
+      if (privateAssignment.pilot1) {
+        // Club member pilot
+        setNewFlight(prev => ({
+          ...prev,
+          pilotId: privateAssignment.pilot1.id,
+          customPilot: ""
+        }));
+      } else if (privateAssignment.guest_pilot1_name) {
+        // Guest pilot
+        setNewFlight(prev => ({
+          ...prev,
+          pilotId: "",
+          customPilot: privateAssignment.guest_pilot1_name
+        }));
+      }
+
+      // Auto-fill co-pilot if it's a double-seater
+      if (aircraft.isDoubleSeater) {
+        if (privateAssignment.pilot2) {
+          // Club member co-pilot
+          setNewFlight(prev => ({
+            ...prev,
+            coPilotId: privateAssignment.pilot2.id,
+            customCoPilot: ""
+          }));
+        } else if (privateAssignment.guest_pilot2_name) {
+          // Guest co-pilot
+          setNewFlight(prev => ({
+            ...prev,
+            coPilotId: "",
+            customCoPilot: privateAssignment.guest_pilot2_name
+          }));
+        }
+      }
+
+      // Auto-fill other flight details
+      setNewFlight(prev => ({
+        ...prev,
+        isSchoolFlight: privateAssignment.isSchoolFlight || false,
+        launchMethod: privateAssignment.launchMethod || "S",
+        startField: privateAssignment.startField || prev.startField
+      }));
+
+      // Mark as private plane and auto-check the checkbox
+      setIsPrivatePlane(true);
+
+      // Show notification
+      toast.success(`Automatisk udfyldt med tildelte piloter for ${aircraft.registration}`, {
+        position: 'top-center'
+      });
     }
   };
 
@@ -182,8 +256,15 @@ export function AddFlightDialog({
           // Add to aircraftOptions
           setAircraftOptions(prev => [
             ...prev,
-            guestPlane
+            {
+              ...guestPlane,
+              // Use competitionId from the returned plane data
+              competitionId: data.plane.competitionId
+            }
           ]);
+          
+          // Check if this matches any private plane assignment
+          autoFillPrivatePlaneInfo(guestPlane);
           
         } else {
           // Fallback handling
@@ -304,6 +385,9 @@ export function AddFlightDialog({
               competitionId: data.plane.competitionId
             }
           ]);
+
+          // Check if this matches any private plane assignment
+          autoFillPrivatePlaneInfo(guestPlane);
         } else {
           // Fallback to creating a temporary aircraft object
           setNewFlight({ 
@@ -349,6 +433,11 @@ export function AddFlightDialog({
       setNewFlight({ ...newFlight, aircraftId: value });
       const aircraft = aircraftOptions.find((a) => a.id.toString() === value);
       setSelectedAircraft(aircraft || null);
+      
+      // Check if this is a private plane and auto-fill pilot info
+      if (aircraft) {
+        autoFillPrivatePlaneInfo(aircraft);
+      }
     }
   }
 
@@ -592,6 +681,20 @@ export function AddFlightDialog({
         });
         setSelectedAircraft(null);
         setIsPrivatePlane(false);
+        
+        // Clear combobox inputs
+        if (aircraftComboboxRef.current) {
+          const input = aircraftComboboxRef.current.querySelector('input');
+          if (input) input.value = '';
+        }
+        if (pilotComboboxRef.current) {
+          const input = pilotComboboxRef.current.querySelector('input');
+          if (input) input.value = '';
+        }
+        if (coPilotComboboxRef.current) {
+          const input = coPilotComboboxRef.current.querySelector('input');
+          if (input) input.value = '';
+        }
         
         // Close the dialog
         onOpenChange(false);
@@ -843,11 +946,11 @@ export function AddFlightDialog({
                     <div className="flex items-center gap-2">
                       <RotateCcw className="h-5 w-5 text-blue-600" />
                       <Label className="text-base font-medium cursor-pointer">
-                        Automatisk pilot-tildeling
+                        Automatisk pilot tildeling
                       </Label>
                     </div>
                     <div className="text-sm text-blue-600 mt-1">
-                      Nye flyvninger i dette fly vil automatisk få tildelt disse piloter i dag
+                      Nye flyvninger i dette fly vil automatisk få tildelt den valgte pilot(er) i dag
                     </div>
                   </div>
                 </div>
