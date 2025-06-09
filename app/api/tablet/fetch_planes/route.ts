@@ -98,62 +98,64 @@ export async function GET(request: NextRequest): Promise<NextResponse<PlanesApiR
       }
     }
 
-    // Fetch all club aircraft
-    const allClubPlanesDb = await prisma.plane.findMany({
-      where: planeWhereClause,
-      orderBy: queryParams.sortBy === 'registration' 
-        ? { registration_id: 'asc' } 
-        : queryParams.sortBy === 'type'
-        ? { type: 'asc' }
-        : { registration_id: 'asc' }, // default
-      select: {
-        id: true,
-        registration_id: true,
-        type: true,
-        is_twoseater: true,
-        flarm_id: true,
-        competition_id: true,
-        createdAt: true,
-        is_guest: true,
-      },
-    });
-
-    // Get recent flights to determine recently used aircraft (for activity sort)
-    let recentlyUsedPlaneIds: string[] = [];
-
-    if (queryParams.sortBy === 'activity') {
-      const recentFlights = await prisma.flightLogbook.findMany({
-        where: {
-          clubId: clubId,
-          deleted: false,
-          planeId: { not: null },
-          createdAt: {
-            gte: thirtyDaysAgo,
-          },
-        },
-        orderBy: {
-          createdAt: 'desc',
-        },
+    // Optimize: fetch planes and recent activity data in parallel
+    const [allClubPlanesDb, recentlyUsedPlaneIds] = await Promise.all([
+      // Fetch all club aircraft
+      prisma.plane.findMany({
+        where: planeWhereClause,
+        orderBy: queryParams.sortBy === 'registration' 
+          ? { registration_id: 'asc' } 
+          : queryParams.sortBy === 'type'
+          ? { type: 'asc' }
+          : { registration_id: 'asc' }, // default
         select: {
-          planeId: true,
+          id: true,
+          registration_id: true,
+          type: true,
+          is_twoseater: true,
+          flarm_id: true,
+          competition_id: true,
+          createdAt: true,
+          is_guest: true,
         },
-        take: 100, // Get more flights to ensure we have enough data
-      });
-
-      // Get unique plane IDs in order of most recent usage
-      const seenPlaneIds = new Set<string>();
-      for (const flight of recentFlights) {
-        if (flight.planeId && !seenPlaneIds.has(flight.planeId)) {
-          seenPlaneIds.add(flight.planeId);
-          recentlyUsedPlaneIds.push(flight.planeId);
-          
-          // Stop after we have 10 unique planes
-          if (recentlyUsedPlaneIds.length >= 10) {
-            break;
-          }
-        }
-      }
-    }
+      }),
+      // Get recent flights to determine recently used aircraft (for activity sort)
+      queryParams.sortBy === 'activity' 
+        ? prisma.flightLogbook.findMany({
+            where: {
+              clubId: clubId,
+              deleted: false,
+              planeId: { not: null },
+              createdAt: {
+                gte: thirtyDaysAgo,
+              },
+            },
+            orderBy: {
+              createdAt: 'desc',
+            },
+            select: {
+              planeId: true,
+            },
+            take: 100, // Get more flights to ensure we have enough data
+          }).then(flights => {
+            // Get unique plane IDs in order of most recent usage
+            const seenPlaneIds = new Set<string>();
+            const recentIds: string[] = [];
+            for (const flight of flights) {
+              if (flight.planeId && !seenPlaneIds.has(flight.planeId)) {
+                seenPlaneIds.add(flight.planeId);
+                recentIds.push(flight.planeId);
+                
+                // Stop after we have 10 unique planes
+                if (recentIds.length >= 10) {
+                  break;
+                }
+              }
+            }
+            return recentIds;
+          })
+        : Promise.resolve([])
+    ]);
     
     // Process planes with guest detection heuristics
     const processedPlanes: PlaneWithMetadata[] = allClubPlanesDb.map(plane => {

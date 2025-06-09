@@ -231,19 +231,44 @@ export async function POST(request: NextRequest): Promise<NextResponse<UpdateFli
     // After all processing for pilots
     console.log('Final update data:', JSON.stringify(updateData, null, 2));
 
-    // Update the flight record
+    // Update the flight record - only select necessary fields for the response
     const updatedFlight = await prisma.flightLogbook.update({
       where: {
         id: flightId,
       },
       data: updateData,
-      include: {
+      select: {
+        id: true,
+        flarm_id: true,
+        registration: true,
+        type: true,
+        competition_number: true,
+        pilot1Id: true,
+        guest_pilot1_name: true,
+        pilot2Id: true,
+        guest_pilot2_name: true,
+        is_school_flight: true,
+        launch_method: true,
+        planeId: true,
+        clubId: true,
+        takeoff_time: true,
+        landing_time: true,
+        flight_duration: true,
+        flight_distance: true,
+        max_altitude: true,
+        max_speed: true,
+        takeoff_airfield: true,
+        landing_airfield: true,
+        notes: true,
+        status: true,
+        deleted: true,
+        createdAt: true,
+        updatedAt: true,
         pilot1: {
           select: {
             id: true,
             firstname: true,
             lastname: true,
-            email: true
           }
         },
         pilot2: {
@@ -251,7 +276,6 @@ export async function POST(request: NextRequest): Promise<NextResponse<UpdateFli
             id: true,
             firstname: true,
             lastname: true,
-            email: true
           }
         },
         plane: {
@@ -293,7 +317,7 @@ export async function POST(request: NextRequest): Promise<NextResponse<UpdateFli
           console.log(`Updated flight ${flightId} with statistics:`, statistics);
           
           // Add the statistics to the updated flight object for response
-          updatedFlight.flight_distance = statistics.distance;
+          (updatedFlight as any).flight_distance = statistics.distance;
           (updatedFlight as any).max_altitude = statistics.maxAltitude;
           (updatedFlight as any).max_speed = statistics.maxSpeed;
         } else {

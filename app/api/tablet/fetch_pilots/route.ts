@@ -58,77 +58,7 @@ export async function GET(request: NextRequest): Promise<NextResponse<PilotsApiR
     const thirtyDaysAgo = new Date();
     thirtyDaysAgo.setDate(thirtyDaysAgo.getDate() - 30);
 
-    // Get recent flights to identify active pilots (unless sortBy is 'name')
-    let recentPilots: Pilot[] = [];
-    const recentPilotIds = new Set<string>();
-
-    if (queryParams.sortBy === 'activity') {
-      const recentFlights = await prisma.flightLogbook.findMany({
-        where: {
-          clubId: clubId,
-          deleted: false,
-          OR: [
-            { pilot1Id: { not: null } },
-            { pilot2Id: { not: null } }
-          ],
-          createdAt: {
-            gte: thirtyDaysAgo
-          }
-        },
-        orderBy: {
-          createdAt: 'desc'
-        },
-        include: {
-          pilot1: {
-            select: {
-              id: true,
-              firstname: true,
-              lastname: true
-            }
-          },
-          pilot2: {
-            select: {
-              id: true,
-              firstname: true,
-              lastname: true
-            }
-          }
-        },
-        take: 50
-      });
-
-      // Extract unique recently active pilots
-      for (const flight of recentFlights) {
-        // Add pilot1 if not already included
-        if (flight.pilot1 && !recentPilotIds.has(flight.pilot1.id)) {
-          recentPilotIds.add(flight.pilot1.id);
-          recentPilots.push({
-            id: flight.pilot1.id,
-            name: `${flight.pilot1.firstname} ${flight.pilot1.lastname}`,
-            firstName: flight.pilot1.firstname,
-            lastName: flight.pilot1.lastname
-          });
-        }
-        
-        // Add pilot2 if not already included
-        if (flight.pilot2 && !recentPilotIds.has(flight.pilot2.id)) {
-          recentPilotIds.add(flight.pilot2.id);
-          recentPilots.push({
-            id: flight.pilot2.id,
-            name: `${flight.pilot2.firstname} ${flight.pilot2.lastname}`,
-            firstName: flight.pilot2.firstname,
-            lastName: flight.pilot2.lastname
-          });
-        }
-        
-        // Limit to 10 most recent active pilots
-        if (recentPilots.length >= 10) {
-          break;
-        }
-      }
-    }
-
-    // Fetch all club pilots
+    // Build search filter for club pilots
     let whereClause: any = { clubId: clubId };
     
     // Add search filter if provided
@@ -141,19 +71,57 @@ export async function GET(request: NextRequest): Promise<NextResponse<PilotsApiR
       };
     }
 
-    const clubPilots = await prisma.clubPilot.findMany({
-      where: whereClause,
-      include: {
-        pilot: {
-          select: {
-            id: true,
-            firstname: true,
-            lastname: true,
-            email: true
+    // Optimize: fetch all data in parallel when activity sorting is needed
+    const [clubPilots, recentPilotIds] = await Promise.all([
+      // Fetch all club pilots
+      prisma.clubPilot.findMany({
+        where: whereClause,
+        include: {
+          pilot: {
+            select: {
+              id: true,
+              firstname: true,
+              lastname: true,
+              email: true
+            }
           }
         }
-      }
-    });
+      }),
+      // Only get recent pilot IDs for activity sorting (optimized query)
+      queryParams.sortBy === 'activity' 
+        ? prisma.flightLogbook.findMany({
+            where: {
+              clubId: clubId,
+              deleted: false,
+              OR: [
+                { pilot1Id: { not: null } },
+                { pilot2Id: { not: null } }
+              ],
+              createdAt: {
+                gte: thirtyDaysAgo
+              }
+            },
+            select: {
+              pilot1Id: true,
+              pilot2Id: true,
+              createdAt: true
+            },
+            orderBy: {
+              createdAt: 'desc'
+            },
+            take: 100 // Increase to ensure we get enough unique pilots
+          }).then(flights => {
+            // Extract unique pilot IDs from recent flights
+            const recentIds = new Set<string>();
+            for (const flight of flights) {
+              if (flight.pilot1Id) recentIds.add(flight.pilot1Id);
+              if (flight.pilot2Id) recentIds.add(flight.pilot2Id);
+              if (recentIds.size >= 10) break; // Limit to first 10 unique pilots
+            }
+            return recentIds;
+          })
+        : Promise.resolve(new Set<string>())
+    ]);
 
     // Transform club pilots to standard format
     const allClubPilots: Pilot[] = clubPilots.map(cp => ({
@@ -170,16 +138,19 @@ export async function GET(request: NextRequest): Promise<NextResponse<PilotsApiR
       // Sort all pilots alphabetically
       combinedPilots = allClubPilots.sort((a, b) => a.name.localeCompare(b.name));
     } else {
-      // Filter out pilots already in recent list
-      const regularPilots = allClubPilots.filter(
-        pilot => !recentPilotIds.has(String(pilot.id))
-      );
-
-      // Sort regular pilots alphabetically by name
-      regularPilots.sort((a, b) => a.name.localeCompare(b.name));
-
-      // Combine lists with recent pilots first (for activity sort)
-      combinedPilots = [...recentPilots, ...regularPilots];
+      // Sort pilots by activity: recent active pilots first, then alphabetically
+      combinedPilots = allClubPilots.sort((a, b) => {
+        const aIsRecent = recentPilotIds.has(String(a.id));
+        const bIsRecent = recentPilotIds.has(String(b.id));
+        
+        // If both are recent or both are not recent, sort alphabetically
+        if (aIsRecent === bIsRecent) {
+          return a.name.localeCompare(b.name);
+        }
+        
+        // Recent pilots come first
+        return aIsRecent ? -1 : 1;
+      });
     }
 
     return NextResponse.json<PilotsApiResponse>({

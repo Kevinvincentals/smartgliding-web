@@ -150,22 +150,8 @@ export async function GET(request: NextRequest): Promise<NextResponse<FlightsApi
     const startOfToday = getStartOfTimezoneDayUTC(today);
     const endOfToday = getEndOfTimezoneDayUTC(today);
 
-    // Fetch private plane assignments for today
-    const privatePlanes = await prisma.dailyPrivatePlanes.findMany({
-      where: {
-        clubId,
-        date: startOfToday,
-        planeId: { not: null } // Only get records with valid plane references
-      },
-      select: {
-        planeId: true
-      }
-    });
-    
-    const privatePlaneIds = new Set(privatePlanes.map((pp: any) => pp.planeId).filter(Boolean));
-
-    // Build query conditions
-    const whereClause: Prisma.FlightLogbookWhereInput = {
+    // Build query conditions for both active and deleted flights
+    const baseWhereClause: Prisma.FlightLogbookWhereInput = {
       clubId, // All flights must belong to this club
       OR: [
         { takeoff_airfield: homefield },
@@ -206,48 +192,16 @@ export async function GET(request: NextRequest): Promise<NextResponse<FlightsApi
       ]
     };
 
-    // Fetch active flights
-    const flights = await prisma.flightLogbook.findMany({
-      where: whereClause,
-      include: {
-        pilot1: {
-          select: {
-            id: true,
-            firstname: true,
-            lastname: true,
-          }
-        },
-        pilot2: {
-          select: {
-            id: true,
-            firstname: true,
-            lastname: true,
-          }
-        },
-        plane: {
-          select: {
-            id: true,
-            registration_id: true,
-            type: true,
-            competition_id: true,
-            is_twoseater: true,
-            flarm_id: true
-          }
-        }
-      },
-      orderBy: {
-        takeoff_time: 'desc'
-      }
-    });
+    // Create combined query conditions for active and deleted flights
+    const whereClause: Prisma.FlightLogbookWhereInput = {
+      ...baseWhereClause,
+      deleted: queryParams.includeDeleted ? undefined : false, // Include deleted only if requested
+    };
 
-    // Fetch deleted flights if requested
-    let deletedFlights: any[] = [];
-    if (queryParams.includeDeleted) {
-      deletedFlights = await prisma.flightLogbook.findMany({
-        where: {
-          ...whereClause,
-          deleted: true,
-        },
+    // Single optimized query that fetches all flights (active and deleted if requested) with private plane data
+    const [flights, privatePlanes] = await Promise.all([
+      prisma.flightLogbook.findMany({
+        where: whereClause,
         include: {
           pilot1: {
             select: {
@@ -277,29 +231,23 @@ export async function GET(request: NextRequest): Promise<NextResponse<FlightsApi
         orderBy: {
           takeoff_time: 'desc'
         }
-      });
-    }
-
-    // Combine and deduplicate flights
-    const flightIds = new Set<string>();
-    const combinedFlights: any[] = [];
+      }),
+      prisma.dailyPrivatePlanes.findMany({
+        where: {
+          clubId,
+          date: startOfToday,
+          planeId: { not: null } // Only get records with valid plane references
+        },
+        select: {
+          planeId: true
+        }
+      })
+    ]);
     
-    flights.forEach(flight => {
-      if (!flightIds.has(flight.id)) {
-        flightIds.add(flight.id);
-        combinedFlights.push(flight);
-      }
-    });
-    
-    deletedFlights.forEach(flight => {
-      if (!flightIds.has(flight.id)) {
-        flightIds.add(flight.id);
-        combinedFlights.push(flight);
-      }
-    });
+    const privatePlaneIds = new Set(privatePlanes.map((pp: any) => pp.planeId).filter(Boolean));
 
-    // Transform flights for response
-    const flightsWithStatus: FlightResponse[] = combinedFlights.map(flight => {
+    // Transform flights for response (no need for deduplication since we have a single query now)
+    const flightsWithStatus: FlightResponse[] = flights.map(flight => {
       let status: FlightStatus = 'pending';
       
       if (flight.deleted) {
@@ -342,10 +290,10 @@ export async function GET(request: NextRequest): Promise<NextResponse<FlightsApi
         guest_pilot1_name: flight.guest_pilot1_name,
         pilot2Id: flight.pilot2Id,
         guest_pilot2_name: flight.guest_pilot2_name,
-        is_school_flight: flight.is_school_flight,
+        is_school_flight: flight.is_school_flight ?? false,
         launch_method: flight.launch_method,
         planeId: flight.planeId,
-        clubId: flight.clubId,
+        clubId: flight.clubId || clubId,
         takeoff_time: flight.takeoff_time,
         landing_time: flight.landing_time,
         flight_duration: flight.flight_duration,

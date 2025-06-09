@@ -146,10 +146,28 @@ export async function POST(request: NextRequest): Promise<NextResponse> {
       }
     }
 
-    // Create the flight record
+    // Create the flight record - only select necessary fields for the response
     const newFlight = await prisma.flightLogbook.create({
       data: flightData,
-      include: {
+      select: {
+        id: true,
+        flarm_id: true,
+        registration: true,
+        type: true,
+        competition_number: true,
+        pilot1Id: true,
+        guest_pilot1_name: true,
+        pilot2Id: true,
+        guest_pilot2_name: true,
+        is_school_flight: true,
+        launch_method: true,
+        planeId: true,
+        clubId: true,
+        takeoff_airfield: true,
+        status: true,
+        deleted: true,
+        createdAt: true,
+        updatedAt: true,
         pilot1: {
           select: {
             id: true,

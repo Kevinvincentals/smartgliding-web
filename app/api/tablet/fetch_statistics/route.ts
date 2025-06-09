@@ -208,10 +208,23 @@ export async function GET(request: NextRequest): Promise<NextResponse<Statistics
       whereClause.AND.push({ planeId: queryParams.aircraftId });
     }
 
-    // Fetch flights for the requested period
+    // Fetch flights for the requested period - only select fields needed for statistics
     const flights = await prisma.flightLogbook.findMany({
       where: whereClause as any,
-      include: {
+      select: {
+        id: true,
+        registration: true,
+        type: true,
+        guest_pilot1_name: true,
+        guest_pilot2_name: true,
+        is_school_flight: true,
+        takeoff_time: true,
+        landing_time: true,
+        takeoff_airfield: true,
+        landing_airfield: true,
+        flight_distance: true,
+        max_altitude: true,
+        max_speed: true,
         pilot1: {
           select: {
             id: true,
