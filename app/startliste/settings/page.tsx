@@ -2,7 +2,7 @@
 
 import { Suspense, useState, useEffect } from "react"
 import { useRouter } from "next/navigation"
-import { Loader2, WifiOff, User, SettingsIcon, FileText, LogOut } from "lucide-react"
+import { Loader2, WifiOff, User, SettingsIcon, FileText, LogOut, History } from "lucide-react"
 import { AlertDialog, AlertDialogContent, AlertDialogHeader, AlertDialogTitle, AlertDialogDescription } from "@/components/ui/alert-dialog"
 import { Button } from "@/components/ui/button"
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
@@ -12,6 +12,7 @@ import { DisplaySettings } from "@/components/settings/display-settings"
 import { useToast } from "@/components/ui/use-toast"
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
 import { Reports } from "@/components/settings/reports"
+import { HistoricalFlights } from "@/components/settings/historical-flights"
 import { StartlisteHeader } from "../components/header"
 import { useStartliste } from "@/contexts/startlist-context"
 import React from "react"
@@ -313,17 +314,24 @@ function Settings({ dailyInfo }: SettingsProps = {}) {
         <TabsList className="w-full h-14 rounded-lg mb-6">
           <TabsTrigger 
             value="general" 
-            className="text-base flex-1 h-full rounded-md data-[state=active]:bg-primary data-[state=active]:text-primary-foreground"
+            className="text-sm flex-1 h-full rounded-md data-[state=active]:bg-primary data-[state=active]:text-primary-foreground"
           >
-            <SettingsIcon className="h-5 w-5 mr-2" />
+            <SettingsIcon className="h-4 w-4 mr-1" />
             Generelt
           </TabsTrigger>
           <TabsTrigger 
             value="reports" 
-            className="text-base flex-1 h-full rounded-md data-[state=active]:bg-primary data-[state=active]:text-primary-foreground"
+            className="text-sm flex-1 h-full rounded-md data-[state=active]:bg-primary data-[state=active]:text-primary-foreground"
           >
-            <FileText className="h-5 w-5 mr-2" />
+            <FileText className="h-4 w-4 mr-1" />
             Rapporter
+          </TabsTrigger>
+          <TabsTrigger 
+            value="historical" 
+            className="text-sm flex-1 h-full rounded-md data-[state=active]:bg-primary data-[state=active]:text-primary-foreground"
+          >
+            <History className="h-4 w-4 mr-1" />
+            Historiske
           </TabsTrigger>
         </TabsList>
 
@@ -388,6 +396,12 @@ function Settings({ dailyInfo }: SettingsProps = {}) {
             isLoading={initialLoading} 
             trafficLeader={trafficLeaderName}
             towPerson={towPersonName}
+          />
+        </TabsContent>
+
+        <TabsContent value="historical" className="mt-0">
+          <HistoricalFlights 
+            isLoading={initialLoading} 
           />
         </TabsContent>
       </Tabs>

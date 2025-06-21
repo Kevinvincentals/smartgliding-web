@@ -13,7 +13,7 @@ interface PilotsApiResponse extends ApiResponse<Pilot[]> {
 
 /**
  * Fetches pilots for a club, prioritizing recently active pilots
- * Returns a list sorted by recent activity, then alphabetically
+ * Returns top 12 pilots sorted by most recent flight date, then rest alphabetically
  */
 export async function GET(request: NextRequest): Promise<NextResponse<PilotsApiResponse>> {
   try {
@@ -54,10 +54,6 @@ export async function GET(request: NextRequest): Promise<NextResponse<PilotsApiR
       );
     }
 
-    // Calculate date threshold for recent activity
-    const thirtyDaysAgo = new Date();
-    thirtyDaysAgo.setDate(thirtyDaysAgo.getDate() - 30);
-
     // Build search filter for club pilots
     let whereClause: any = { clubId: clubId };
     
@@ -71,8 +67,8 @@ export async function GET(request: NextRequest): Promise<NextResponse<PilotsApiR
       };
     }
 
-    // Optimize: fetch all data in parallel when activity sorting is needed
-    const [clubPilots, recentPilotIds] = await Promise.all([
+    // Fetch all club pilots and their most recent flight dates in parallel
+    const [clubPilots, recentFlightActivity] = await Promise.all([
       // Fetch all club pilots
       prisma.clubPilot.findMany({
         where: whereClause,
@@ -87,8 +83,8 @@ export async function GET(request: NextRequest): Promise<NextResponse<PilotsApiR
           }
         }
       }),
-      // Only get recent pilot IDs for activity sorting (optimized query)
-      queryParams.sortBy === 'activity' 
+      // Get the most recent flight for each pilot (only if not searching)
+      !queryParams.search 
         ? prisma.flightLogbook.findMany({
             where: {
               clubId: clubId,
@@ -96,61 +92,88 @@ export async function GET(request: NextRequest): Promise<NextResponse<PilotsApiR
               OR: [
                 { pilot1Id: { not: null } },
                 { pilot2Id: { not: null } }
-              ],
-              createdAt: {
-                gte: thirtyDaysAgo
-              }
+              ]
             },
             select: {
               pilot1Id: true,
               pilot2Id: true,
+              takeoff_time: true,
               createdAt: true
             },
-            orderBy: {
-              createdAt: 'desc'
-            },
-            take: 100 // Increase to ensure we get enough unique pilots
+            orderBy: [
+              { takeoff_time: 'desc' },
+              { createdAt: 'desc' }
+            ],
+            take: 500 // Get enough flights to find recent activity for all active pilots
           }).then(flights => {
-            // Extract unique pilot IDs from recent flights
-            const recentIds = new Set<string>();
+            // Build a map of pilot ID to their most recent flight date
+            const pilotLastFlight = new Map<string, Date>();
+            
             for (const flight of flights) {
-              if (flight.pilot1Id) recentIds.add(flight.pilot1Id);
-              if (flight.pilot2Id) recentIds.add(flight.pilot2Id);
-              if (recentIds.size >= 10) break; // Limit to first 10 unique pilots
+              // Use takeoff_time if available, otherwise createdAt
+              const flightDate = flight.takeoff_time || flight.createdAt;
+              
+              // Check pilot1
+              if (flight.pilot1Id && !pilotLastFlight.has(flight.pilot1Id)) {
+                pilotLastFlight.set(flight.pilot1Id, flightDate);
+              }
+              
+              // Check pilot2
+              if (flight.pilot2Id && !pilotLastFlight.has(flight.pilot2Id)) {
+                pilotLastFlight.set(flight.pilot2Id, flightDate);
+              }
             }
-            return recentIds;
+            
+            return pilotLastFlight;
           })
-        : Promise.resolve(new Set<string>())
+        : Promise.resolve(new Map<string, Date>())
     ]);
 
-    // Transform club pilots to standard format
-    const allClubPilots: Pilot[] = clubPilots.map(cp => ({
+    // Transform club pilots to standard format with last flight date
+    const allClubPilots: (Pilot & { lastFlightDate?: Date })[] = clubPilots.map(cp => ({
       id: cp.pilot.id,
       name: `${cp.pilot.firstname} ${cp.pilot.lastname}`,
       firstName: cp.pilot.firstname,
       lastName: cp.pilot.lastname,
-      email: cp.pilot.email || undefined
+      email: cp.pilot.email || undefined,
+      lastFlightDate: recentFlightActivity.get(cp.pilot.id)
     }));
 
     let combinedPilots: Pilot[];
 
-    if (queryParams.sortBy === 'name') {
-      // Sort all pilots alphabetically
-      combinedPilots = allClubPilots.sort((a, b) => a.name.localeCompare(b.name));
+    if (queryParams.sortBy === 'name' || queryParams.search) {
+      // Sort all pilots alphabetically (always do this when searching)
+      combinedPilots = allClubPilots
+        .sort((a, b) => a.name.localeCompare(b.name))
+        .map(p => ({ ...p, lastFlightDate: undefined })); // Remove the helper field
     } else {
-      // Sort pilots by activity: recent active pilots first, then alphabetically
-      combinedPilots = allClubPilots.sort((a, b) => {
-        const aIsRecent = recentPilotIds.has(String(a.id));
-        const bIsRecent = recentPilotIds.has(String(b.id));
-        
-        // If both are recent or both are not recent, sort alphabetically
-        if (aIsRecent === bIsRecent) {
-          return a.name.localeCompare(b.name);
-        }
-        
-        // Recent pilots come first
-        return aIsRecent ? -1 : 1;
+      // Sort by recent activity: top 12 pilots by last flight date, rest alphabetical
+      
+      // Separate pilots who have flown from those who haven't
+      const pilotsWithFlights = allClubPilots.filter(p => p.lastFlightDate);
+      const pilotsWithoutFlights = allClubPilots.filter(p => !p.lastFlightDate);
+      
+      // Sort pilots with flights by most recent first
+      const sortedRecentPilots = pilotsWithFlights.sort((a, b) => {
+        if (!a.lastFlightDate || !b.lastFlightDate) return 0;
+        return b.lastFlightDate.getTime() - a.lastFlightDate.getTime();
       });
+      
+      // Take the top 12 most recent pilots
+      const topRecentPilots = sortedRecentPilots.slice(0, 12);
+      const remainingRecentPilots = sortedRecentPilots.slice(12);
+      
+      // Sort the remaining pilots (both recent overflow and never flown) alphabetically
+      const remainingPilots = [...remainingRecentPilots, ...pilotsWithoutFlights]
+        .sort((a, b) => a.name.localeCompare(b.name));
+      
+      // Log the sorting results for debugging
+      console.log(`Pilot sorting - Club: ${clubId}, Recent flyers (top 12):`, 
+        topRecentPilots.map(p => `${p.name} (${p.lastFlightDate?.toISOString().split('T')[0] || 'unknown'})`));
+      
+      // Combine: top 12 recent pilots first, then alphabetical rest
+      combinedPilots = [...topRecentPilots, ...remainingPilots]
+        .map(p => ({ ...p, lastFlightDate: undefined })); // Remove the helper field
     }
 
     return NextResponse.json<PilotsApiResponse>({
