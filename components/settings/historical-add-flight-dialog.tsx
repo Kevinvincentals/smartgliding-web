@@ -280,7 +280,7 @@ export function HistoricalAddFlightDialog({
 
           {/* Pilot Selection */}
           <div className="grid grid-cols-4 items-center gap-4">
-            <Label htmlFor="pilot" className="text-right">Pilot</Label>
+            <Label htmlFor="pilot" className="text-right">1. Pilot</Label>
             <div className="col-span-3">
               <Combobox
                 items={pilotOptions.map(p => ({
@@ -305,7 +305,7 @@ export function HistoricalAddFlightDialog({
           {/* Co-pilot Selection (for double seaters) */}
           {(aircraftOptions.find(a => a.id.toString() === newFlight.aircraftId)?.isDoubleSeater || newFlight.customAircraft) && (
             <div className="grid grid-cols-4 items-center gap-4">
-              <Label htmlFor="copilot" className="text-right">Bagsæde/Instruktør</Label>
+              <Label htmlFor="copilot" className="text-right">2. Pilot / Instruktør</Label>
               <div className="col-span-3">
                 <Combobox
                   items={pilotOptions.map(p => ({

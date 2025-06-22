@@ -811,7 +811,7 @@ export function AddFlightDialog({
                 </div>
                 <div className="grid gap-1">
                   <Label className="text-sm font-medium">
-                    Pilot
+                    1. Pilot
                   </Label>
                   <div className="flex gap-2">
                     <div className="flex-1" ref={pilotComboboxRef}>
@@ -844,7 +844,7 @@ export function AddFlightDialog({
                 {selectedAircraft?.isDoubleSeater && (
                   <div className="grid gap-1">
                     <Label className="text-sm font-medium">
-                      Bagsæde Pilot / Instruktør
+                      2. Pilot / Instruktør
                     </Label>
                     <div className="flex gap-2">
                       <div className="flex-1" ref={coPilotComboboxRef}>
@@ -1094,7 +1094,7 @@ export function AddFlightDialog({
               </div>
               <div className="grid gap-1">
                 <Label htmlFor="pilot" className="text-sm font-medium">
-                  Pilot
+                  1. Pilot
                 </Label>
                 <div className="flex gap-2">
                   <div className="flex-1" ref={pilotComboboxRef}>
@@ -1127,7 +1127,7 @@ export function AddFlightDialog({
               {selectedAircraft?.isDoubleSeater && (
                 <div className="grid gap-1">
                   <Label className="text-sm font-medium">
-                    Bagsæde Pilot / Instruktør
+                    2. Pilot / Instruktør
                   </Label>
                   <div className="flex gap-2">
                     <div className="flex-1" ref={coPilotComboboxRef}>
