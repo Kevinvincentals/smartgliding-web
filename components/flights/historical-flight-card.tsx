@@ -3,7 +3,6 @@
 import { Card } from "@/components/ui/card"
 import { Tooltip, TooltipContent, TooltipTrigger, TooltipProvider } from "@/components/ui/tooltip"
 import { Clock, GraduationCap, Users, User, FileText, RotateCcw } from "lucide-react"
-import Image from "next/image"
 import { forwardRef, useState, useEffect } from "react"
 import type { Flight } from "@/types/flight"
 
@@ -81,25 +80,6 @@ export const HistoricalFlightCard = forwardRef<HTMLDivElement, HistoricalFlightC
     return '';
   };
 
-  // Function to get FLARM status icon/class
-  const getFlarmStatusIndicator = () => {
-    // Only show the indicator for planes that are in flight or pending
-    if (!flight.aircraft.hasFlarm || flight.status === "completed" || flight.status === "deleted" || flight.deleted) {
-      return null;
-    }
-
-    // Get status color class
-    const statusClass = flarmStatus === 'online' 
-      ? 'bg-green-500' 
-      : flarmStatus === 'offline' 
-        ? 'bg-red-500' 
-        : 'bg-gray-400';
-
-    return (
-      <div className={`absolute -top-1 -right-1 w-3 h-3 rounded-full border-2 border-white ${statusClass}`} 
-           title={`FLARM ${flarmStatus === 'online' ? 'online' : flarmStatus === 'offline' ? 'offline' : 'status ukendt'}`} />
-    );
-  };
 
   // Responsive classes for different screen sizes
   const paddingClass = compact ? "py-1.5" : "py-2";
@@ -109,7 +89,6 @@ export const HistoricalFlightCard = forwardRef<HTMLDivElement, HistoricalFlightC
   const buttonSizeClass = compact ? "h-7 w-7" : "h-8 w-8";
   const buttonIconSizeClass = compact ? "h-3 w-3" : "h-4 w-4";
   const badgePaddingClass = compact ? "px-2 py-0.5" : "px-3 py-1";
-  const flarmIconSizeClass = compact ? "w-8 h-3" : "w-10 h-3";
 
   // Flight status-based styling classes - matching original FlightCard exactly
   const statusClasses = flight.deleted || flight.status === 'deleted'
@@ -141,27 +120,6 @@ export const HistoricalFlightCard = forwardRef<HTMLDivElement, HistoricalFlightC
           <div className="flex flex-col">
             <div className="flex items-center gap-1">
               <span className={`${textSizeClass} font-bold`}>{flight.aircraft.registration}</span>
-              {flight.aircraft.hasFlarm && (
-                <div className="flex items-center relative">
-                  <Tooltip>
-                    <TooltipTrigger asChild>
-                      <div className="bg-white rounded-md p-0.5 border border-gray-200 flex items-center justify-center h-5">
-                        <Image
-                          src="/images/flarm-logo.png"
-                          alt="FLARM"
-                          width={40}
-                          height={13}
-                          className={flarmIconSizeClass}
-                        />
-                      </div>
-                    </TooltipTrigger>
-                    <TooltipContent>
-                      <p>FLARM Collision Avoidance System</p>
-                    </TooltipContent>
-                  </Tooltip>
-                  {getFlarmStatusIndicator()}
-                </div>
-              )}
               {flight.isSchoolFlight && (
                 <Tooltip>
                   <TooltipTrigger asChild>
