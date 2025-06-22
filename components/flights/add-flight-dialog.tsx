@@ -638,15 +638,15 @@ export function AddFlightDialog({
         onAddFlight(aircraft, pilot, coPilot, newFlight.isSchoolFlight, newFlight.startField, newFlight.launchMethod, socket);
         
         // If private plane is checked, register the private plane assignment
-        if (isPrivatePlane && aircraft) {
-          try {
-            await fetch('/api/tablet/private_planes', {
-              method: 'POST',
-              headers: {
-                'Content-Type': 'application/json',
-              },
-              body: JSON.stringify({
-                planeId: aircraft.id.toString(),
+      if (isPrivatePlane && aircraft) {
+        try {
+          await fetch('/api/tablet/private_planes', {
+            method: 'POST',
+            headers: {
+              'Content-Type': 'application/json',
+            },
+            body: JSON.stringify({
+              planeId: aircraft.id.toString(),
                 pilot1Id: pilot?.id !== "guest" ? pilot?.id : undefined,
                 pilot2Id: coPilot?.id !== "guest" ? coPilot?.id : undefined,
                 guest_pilot1_name: pilot?.id === "guest" ? pilot?.name : undefined,

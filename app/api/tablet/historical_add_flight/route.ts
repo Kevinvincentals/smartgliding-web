@@ -3,7 +3,7 @@ import { prisma } from '@/lib/prisma'
 import type { JWTPayload, ApiResponse } from '@/types/tablet-api'
 import type { LaunchMethod } from '@/types/flight'
 import { createFlightRequestSchema, validateRequestBody } from '@/lib/validations/tablet-api'
-import { getStartOfTimezoneDayUTC, getEndOfTimezoneDayUTC } from '@/lib/time-utils'
+import { getStartOfTimezoneDayUTC, getEndOfTimezoneDayUTC, localTimeStringToUTC } from '@/lib/time-utils'
 
 /**
  * Historical flight creation response
@@ -22,8 +22,8 @@ export async function POST(request: NextRequest): Promise<NextResponse> {
     // Parse and validate request body
     const body = await request.json()
     
-    // Validate that date is provided
-    const { date, ...flightData } = body;
+    // Validate that date is provided and extract times
+    const { date, takeoffTime, landingTime, ...flightData } = body;
     if (!date) {
       return NextResponse.json<CreateHistoricalFlightResponse>(
         { 
@@ -124,6 +124,37 @@ export async function POST(request: NextRequest): Promise<NextResponse> {
     // Calculate the target date's start time in UTC for createdAt
     const historicalCreatedAt = getStartOfTimezoneDayUTC(targetDate);
 
+    // Convert times if provided
+    let takeoffTimeUTC = null;
+    let landingTimeUTC = null;
+    let flightStatus = 'PENDING';
+    
+    if (takeoffTime) {
+      takeoffTimeUTC = localTimeStringToUTC(takeoffTime);
+      if (takeoffTimeUTC) {
+        // Adjust the takeoff time to the historical date
+        const historicalTakeoff = new Date(targetDate);
+        historicalTakeoff.setHours(takeoffTimeUTC.getHours(), takeoffTimeUTC.getMinutes(), takeoffTimeUTC.getSeconds());
+        takeoffTimeUTC = historicalTakeoff;
+        flightStatus = 'INFLIGHT';
+      }
+    }
+    
+    if (landingTime) {
+      landingTimeUTC = localTimeStringToUTC(landingTime);
+      if (landingTimeUTC) {
+        // Adjust the landing time to the historical date
+        const historicalLanding = new Date(targetDate);
+        historicalLanding.setHours(landingTimeUTC.getHours(), landingTimeUTC.getMinutes(), landingTimeUTC.getSeconds());
+        landingTimeUTC = historicalLanding;
+        if (takeoffTimeUTC) {
+          flightStatus = 'COMPLETED';
+        } else {
+          flightStatus = 'LANDED';
+        }
+      }
+    }
+
     // Create flight data object with historical timestamp
     const historicalFlightData = {
       flarm_id: planeFlarmId || (aircraft.hasFlarm ? (aircraft.flarmId || 'unknown') : 'none'),
@@ -135,12 +166,16 @@ export async function POST(request: NextRequest): Promise<NextResponse> {
       planeId: planeId,
       clubId: clubId,
       takeoff_airfield: startField,
+      takeoff_time: takeoffTimeUTC,
+      landing_time: landingTimeUTC,
+      status: flightStatus,
       pilot1Id: null as string | null,
       pilot2Id: null as string | null,
       guest_pilot1_name: null as string | null,
       guest_pilot2_name: null as string | null,
       createdAt: historicalCreatedAt, // Set to historical date instead of now
       updatedAt: historicalCreatedAt, // Set to historical date instead of now
+      notes: `Historical flight for ${date}`, // Mark as historical flight
     }
 
     // Handle pilot - check if club member or guest
@@ -250,6 +285,7 @@ export async function POST(request: NextRequest): Promise<NextResponse> {
 
     // Note: No WebSocket broadcast for historical flights
     console.log(`Historical flight created for date ${date}:`, newFlight.id);
+    console.log(`Historical flight FLARM ID: ${newFlight.flarm_id}, Registration: ${newFlight.registration}`);
 
     return NextResponse.json<CreateHistoricalFlightResponse>({
       success: true,

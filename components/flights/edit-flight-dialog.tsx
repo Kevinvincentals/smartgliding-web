@@ -30,6 +30,8 @@ interface EditFlightDialogProps {
   pilotOptions: Pilot[]
   airfieldOptions: AirfieldOption[]
   flarmStatus: FlarmStatus | null
+  isHistorical?: boolean
+  historicalDate?: Date
 }
 
 export function EditFlightDialog({
@@ -42,6 +44,8 @@ export function EditFlightDialog({
   pilotOptions,
   airfieldOptions: initialAirfieldOptions,
   flarmStatus,
+  isHistorical = false,
+  historicalDate,
 }: EditFlightDialogProps) {
   const [apiPilots, setApiPilots] = useState<Pilot[]>([])
   const [isLoadingPilots, setIsLoadingPilots] = useState(false)
@@ -455,13 +459,22 @@ export function EditFlightDialog({
       
       console.log(`Directly removing ${pilotType} with data:`, JSON.stringify(updateData, null, 2));
 
+      // Use different endpoint based on whether this is historical or not
+      const endpoint = isHistorical ? '/api/tablet/historical_edit_flight' : '/api/tablet/edit_flight';
+      
+      // Add historical date to the payload if needed
+      const finalPayload = isHistorical && historicalDate ? {
+        ...updateData,
+        date: `${historicalDate.getFullYear()}-${String(historicalDate.getMonth() + 1).padStart(2, '0')}-${String(historicalDate.getDate()).padStart(2, '0')}`
+      } : updateData;
+
       // Call the API endpoint directly
-      const response = await fetch('/api/tablet/edit_flight', {
+      const response = await fetch(endpoint, {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
         },
-        body: JSON.stringify(updateData),
+        body: JSON.stringify(finalPayload),
       });
 
       const data = await response.json();
@@ -550,12 +563,21 @@ export function EditFlightDialog({
       
       console.log('Saving to database:', JSON.stringify(dataToSend, null, 2));
       
-      const response = await fetch('/api/tablet/edit_flight', {
+      // Use different endpoint based on whether this is historical or not
+      const endpoint = isHistorical ? '/api/tablet/historical_edit_flight' : '/api/tablet/edit_flight';
+      
+      // Add historical date to the payload if needed
+      const finalPayload = isHistorical && historicalDate ? {
+        ...dataToSend,
+        date: `${historicalDate.getFullYear()}-${String(historicalDate.getMonth() + 1).padStart(2, '0')}-${String(historicalDate.getDate()).padStart(2, '0')}`
+      } : dataToSend;
+      
+      const response = await fetch(endpoint, {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
         },
-        body: JSON.stringify(dataToSend),
+        body: JSON.stringify(finalPayload),
       });
 
       const data = await response.json();
@@ -637,12 +659,21 @@ export function EditFlightDialog({
     setIsSaving(true);
     setError(null);
     
-    fetch('/api/tablet/edit_flight', {
+    // Use different endpoint based on whether this is historical or not
+    const endpoint = isHistorical ? '/api/tablet/historical_edit_flight' : '/api/tablet/edit_flight';
+    
+    // Add historical date to the payload if needed
+    const finalPayload = isHistorical && historicalDate ? {
+      ...dataToSend,
+      date: `${historicalDate.getFullYear()}-${String(historicalDate.getMonth() + 1).padStart(2, '0')}-${String(historicalDate.getDate()).padStart(2, '0')}`
+    } : dataToSend;
+    
+    fetch(endpoint, {
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',
       },
-      body: JSON.stringify(dataToSend),
+      body: JSON.stringify(finalPayload),
     })
     .then(response => response.json())
     .then(data => {

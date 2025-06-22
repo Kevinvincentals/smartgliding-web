@@ -10,9 +10,9 @@ import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover
 import { cn } from "@/lib/utils"
 import { format } from "date-fns"
 import { da } from "date-fns/locale"
-import { FlightCard } from "@/components/flights/flight-card"
+import { HistoricalFlightCard } from "@/components/flights/historical-flight-card"
 import { EmptyFlightList } from "@/components/flights/empty-flight-list"
-import { AddFlightDialog } from "@/components/flights/add-flight-dialog"
+import { HistoricalAddFlightDialog } from "@/components/settings/historical-add-flight-dialog"
 import { EditFlightDialog } from "@/components/flights/edit-flight-dialog"
 import { TimePickerDialog } from "@/components/time-picker-dialog"
 import { useToast } from "@/components/ui/use-toast"
@@ -334,78 +334,6 @@ export function HistoricalFlights({ isLoading = false }: HistoricalFlightsProps)
   }, [selectedDate]);
 
 
-  // Handle flight operations
-  const handleAddFlight = async (
-    aircraft: Aircraft | null,
-    pilot: Pilot | null,
-    coPilot: Pilot | null,
-    isSchoolFlight: boolean,
-    startField: string,
-    launchMethod: string,
-    socket: WebSocket | null
-  ) => {
-    if (aircraft && pilot) {
-      try {
-        // Format the date in YYYY-MM-DD format without timezone issues
-        const year = selectedDate.getFullYear();
-        const month = String(selectedDate.getMonth() + 1).padStart(2, '0');
-        const day = String(selectedDate.getDate()).padStart(2, '0');
-        const formattedDate = `${year}-${month}-${day}`;
-
-        // Create payload for historical flight
-        const payload = {
-          date: formattedDate, // Include the historical date
-          aircraft: {
-            id: aircraft.registration, // Use registration as ID for lookup
-            registration: aircraft.registration,
-            type: aircraft.type,
-            isDoubleSeater: aircraft.isDoubleSeater,
-            hasFlarm: aircraft.hasFlarm,
-            flarmId: aircraft.flarmId,
-          },
-          pilot,
-          coPilot,
-          isSchoolFlight,
-          startField,
-          launchMethod: launchMethod || 'S'
-        };
-
-        const response = await fetch('/api/tablet/historical_add_flight', {
-          method: 'POST',
-          headers: {
-            'Content-Type': 'application/json',
-          },
-          body: JSON.stringify(payload),
-        });
-
-        const data = await response.json();
-        
-        if (data.success) {
-          toast({
-            title: "Flyvning tilføjet",
-            description: `Historisk flyvning tilføjet for ${format(selectedDate, 'dd. MMMM yyyy', { locale: da })}`,
-            variant: "default",
-          });
-          
-          setIsAddDialogOpen(false);
-          // Refresh the flights after adding
-          fetchFlightsForDate(selectedDate);
-        } else {
-          toast({
-            title: "Fejl ved tilføjelse",
-            description: data.error || "Der opstod en fejl ved tilføjelse af flyvningen",
-            variant: "destructive",
-          });
-        }
-      } catch (error) {
-        toast({
-          title: "Fejl ved tilføjelse",
-          description: "Der opstod en uventet fejl",
-          variant: "destructive",
-        });
-      }
-    }
-  };
 
   const handleEditClick = (flight: Flight) => {
     const flightToEdit = { 
@@ -832,23 +760,18 @@ export function HistoricalFlights({ isLoading = false }: HistoricalFlightsProps)
                     : null;
                   
                   return (
-                    <FlightCard
+                    <HistoricalFlightCard
                       key={flight.id}
                       flight={flight}
                       sequentialNumber={flight.sequentialNumber}
                       onEditClick={handleEditClick}
-                      onStartFlight={handleStartFlight}
-                      onEndFlight={handleEndFlight}
                       onTimeClick={handleTimeClick}
-                      onDuplicate={() => {}} // Disable duplicate for historical flights
-                      onReplayFlight={() => {}} // Disable replay for now
                       getFlightDuration={getFlightDuration}
                       isRecentlyUpdated={false}
                       missingPilotWarning={false}
                       tableMode={true}
                       compact={false}
                       flarmStatus={flarmStatus}
-                      isDuplicating={false}
                     />
                   );
                 })}
@@ -863,23 +786,18 @@ export function HistoricalFlights({ isLoading = false }: HistoricalFlightsProps)
                 <h4 className="text-md font-medium mb-3 text-muted-foreground">Slettede flyvninger</h4>
                 <div className="space-y-1.5 opacity-60">
                   {deletedFlights.map((flight) => (
-                    <FlightCard
+                    <HistoricalFlightCard
                       key={flight.id}
                       flight={flight}
                       sequentialNumber={0}
                       onEditClick={handleEditClick}
-                      onStartFlight={() => {}}
-                      onEndFlight={() => {}}
                       onTimeClick={() => {}}
-                      onDuplicate={() => {}}
-                      onReplayFlight={() => {}}
                       getFlightDuration={getFlightDuration}
                       isRecentlyUpdated={false}
                       missingPilotWarning={false}
                       tableMode={true}
                       compact={false}
                       flarmStatus={null}
-                      isDuplicating={false}
                     />
                   ))}
                 </div>
@@ -888,13 +806,13 @@ export function HistoricalFlights({ isLoading = false }: HistoricalFlightsProps)
           </div>
         )}
 
-        {/* Add Flight Dialog */}
-        <AddFlightDialog
+        {/* Historical Add Flight Dialog */}
+        <HistoricalAddFlightDialog
           open={isAddDialogOpen}
           onOpenChange={setIsAddDialogOpen}
-          onAddFlight={handleAddFlight}
-          socket={null} // No WebSocket for historical flights
+          selectedDate={selectedDate}
           airfieldOptions={airfieldOptions}
+          onFlightAdded={() => fetchFlightsForDate(selectedDate)}
         />
 
         {/* Edit Flight Dialog */}
@@ -910,6 +828,8 @@ export function HistoricalFlights({ isLoading = false }: HistoricalFlightsProps)
           flarmStatus={editFlight?.aircraft?.hasFlarm && editFlight?.aircraft?.flarmId 
             ? flarmStatuses[editFlight.aircraft.flarmId] || 'unknown'
             : null}
+          isHistorical={true}
+          historicalDate={selectedDate}
         />
 
         {/* Time Picker Dialog */}
