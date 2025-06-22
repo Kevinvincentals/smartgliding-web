@@ -3,7 +3,7 @@
 import { useEffect, useState } from "react"
 import { Label } from "@/components/ui/label"
 import { Combobox } from "@/components/ui/combobox"
-import { Loader2 } from "lucide-react"
+import { Loader2, X } from "lucide-react"
 import { Button } from "@/components/ui/button"
 
 interface Pilot {
@@ -20,6 +20,7 @@ interface TrafficLeaderSettingProps {
   isLoading: boolean
   isInitialLoading: boolean
   onFocus: () => void
+  onClear: () => void
 }
 
 export function TrafficLeaderSetting({
@@ -30,7 +31,8 @@ export function TrafficLeaderSetting({
   setCustomTrafficLeader,
   isLoading,
   isInitialLoading,
-  onFocus
+  onFocus,
+  onClear
 }: TrafficLeaderSettingProps) {
   const [hasFocused, setHasFocused] = useState(false);
 
@@ -65,24 +67,37 @@ export function TrafficLeaderSetting({
             </div>
           </Button>
         ) : (
-          <>
-            <Combobox
-              items={pilots.map((pilot) => ({
-                label: pilot.name,
-                value: pilot.id,
-              }))}
-              value={trafficLeaderId}
-              onChange={(value) => setTrafficLeaderId(value)}
-              onTextChange={(text) => setCustomTrafficLeader(text)}
-              placeholder="Søg eller indtast trafikleder"
-              initialSearchMode={true}
-            />
-            {isLoading && (
-              <div className="absolute right-10 top-1/2 transform -translate-y-1/2">
-                <Loader2 className="h-4 w-4 animate-spin text-muted-foreground" />
-              </div>
+          <div className="flex gap-2">
+            <div className="flex-1 relative">
+              <Combobox
+                items={pilots.map((pilot) => ({
+                  label: pilot.name,
+                  value: pilot.id,
+                }))}
+                value={trafficLeaderId}
+                onChange={(value) => setTrafficLeaderId(value)}
+                onTextChange={(text) => setCustomTrafficLeader(text)}
+                placeholder="Søg eller indtast trafikleder"
+                initialSearchMode={true}
+              />
+              {isLoading && (
+                <div className="absolute right-10 top-1/2 transform -translate-y-1/2">
+                  <Loader2 className="h-4 w-4 animate-spin text-muted-foreground" />
+                </div>
+              )}
+            </div>
+            {(trafficLeaderId || customTrafficLeader) && (
+              <Button
+                variant="outline"
+                size="icon"
+                className="h-12 w-12 flex-shrink-0"
+                onClick={onClear}
+                title="Fjern trafikleder"
+              >
+                <X className="h-4 w-4" />
+              </Button>
             )}
-          </>
+          </div>
         )}
       </div>
     </div>

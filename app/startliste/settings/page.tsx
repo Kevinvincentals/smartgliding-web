@@ -249,6 +249,80 @@ function Settings({ dailyInfo }: SettingsProps = {}) {
     updateTowPerson(id)
   }
 
+  // Clear traffic leader assignment
+  const clearTrafficLeader = async () => {
+    try {
+      const response = await fetch('/api/tablet/daily_info', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+          trafficLeaderId: null
+        }),
+      })
+      
+      if (!response.ok) {
+        throw new Error('Failed to clear traffic leader')
+      }
+      
+      const data = await response.json()
+      if (data.success) {
+        setTrafficLeaderId("")
+        setCustomTrafficLeader("")
+        toast({
+          title: "Trafikleder fjernet",
+          description: "Trafiklederen er blevet fjernet",
+          variant: "default",
+        })
+      }
+    } catch (error) {
+      console.error('Error clearing traffic leader:', error)
+      toast({
+        title: "Fejl ved fjernelse",
+        description: "Kunne ikke fjerne trafikleder",
+        variant: "destructive",
+      })
+    }
+  }
+
+  // Clear tow person assignment
+  const clearTowPerson = async () => {
+    try {
+      const response = await fetch('/api/tablet/daily_info', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+          towPersonId: null
+        }),
+      })
+      
+      if (!response.ok) {
+        throw new Error('Failed to clear tow person')
+      }
+      
+      const data = await response.json()
+      if (data.success) {
+        setTowPersonId("")
+        setCustomTowPerson("")
+        toast({
+          title: "Spilfører fjernet",
+          description: "Spilføreren er blevet fjernet",
+          variant: "default",
+        })
+      }
+    } catch (error) {
+      console.error('Error clearing tow person:', error)
+      toast({
+        title: "Fejl ved fjernelse",
+        description: "Kunne ikke fjerne spilpasser",
+        variant: "destructive",
+      })
+    }
+  }
+
   // Update hideCompleted setting in localStorage
   useEffect(() => {
     localStorage.setItem("hideCompleted", hideCompleted.toString())
@@ -351,6 +425,7 @@ function Settings({ dailyInfo }: SettingsProps = {}) {
                 isLoading={isLoading}
                 isInitialLoading={initialLoading}
                 onFocus={handleFocus}
+                onClear={clearTrafficLeader}
               />
 
               <TowPersonSetting
@@ -362,6 +437,7 @@ function Settings({ dailyInfo }: SettingsProps = {}) {
                 isLoading={isLoading}
                 isInitialLoading={initialLoading}
                 onFocus={handleFocus}
+                onClear={clearTowPerson}
               />
 
               <DisplaySettings

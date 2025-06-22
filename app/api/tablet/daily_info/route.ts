@@ -278,7 +278,9 @@ export async function POST(request: NextRequest): Promise<NextResponse<DailyInfo
     // Handle trafficLeaderId with shifting logic
     if (data.trafficLeaderId !== undefined) {
       if (data.trafficLeaderId === null || data.trafficLeaderId === "") {
+        // When explicitly clearing, clear both primary and secondary fields
         updateData.trafficLeaderId = null;
+        updateData.trafficLeaderId2 = null;
       } else {
         // If there's already a traffic leader and we're setting a new one (different from current)
         if (dailyInfo.trafficLeaderId && dailyInfo.trafficLeaderId !== data.trafficLeaderId) {
@@ -301,7 +303,9 @@ export async function POST(request: NextRequest): Promise<NextResponse<DailyInfo
     // Handle towPersonId with shifting logic
     if (data.towPersonId !== undefined) {
       if (data.towPersonId === null || data.towPersonId === "") {
+        // When explicitly clearing, clear both primary and secondary fields
         updateData.towPersonId = null;
+        updateData.towPersonId2 = null;
       } else {
         // If there's already a tow person and we're setting a new one (different from current)
         if (dailyInfo.towPersonId && dailyInfo.towPersonId !== data.towPersonId) {
