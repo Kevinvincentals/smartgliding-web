@@ -46,7 +46,6 @@ export async function POST(request: NextRequest): Promise<NextResponse<DeleteFli
       );
     }
 
-    console.log(`Marking flight ID: ${dbFlightId} as deleted`);
 
     // Check if we need to decrement the plane's start count
     // Only decrement if the flight has a takeoff time and is associated with a plane
@@ -119,15 +118,14 @@ export async function POST(request: NextRequest): Promise<NextResponse<DeleteFli
             },
           ],
         });
-        console.log(`Decremented start count for plane ID: ${existingFlight.planeId}`);
       } catch (error) {
         console.error('Error decrementing plane starts:', error);
       }
     }
 
-    // Also decrement pilot flight starts if needed
+    // Decrement pilot flight starts based on flight type
     if (shouldDecrementPlaneStarts) {
-      // For pilot1
+      // Always decrement pilot1 (1. Pilot)
       if (existingFlight.pilot1Id) {
         try {
           await prisma.$runCommandRaw({
@@ -151,14 +149,13 @@ export async function POST(request: NextRequest): Promise<NextResponse<DeleteFli
               },
             ],
           });
-          console.log(`Decremented flight starts for pilot1 ID: ${existingFlight.pilot1Id}`);
         } catch (error) {
           console.error('Error decrementing pilot1 flight starts:', error);
         }
       }
 
-      // For pilot2 (co-pilot)
-      if (existingFlight.pilot2Id) {
+      // Only decrement pilot2 (2. Pilot) if it's a school flight
+      if (existingFlight.pilot2Id && existingFlight.is_school_flight) {
         try {
           await prisma.$runCommandRaw({
             update: "pilots",
@@ -181,10 +178,10 @@ export async function POST(request: NextRequest): Promise<NextResponse<DeleteFli
               },
             ],
           });
-          console.log(`Decremented flight starts for pilot2 ID: ${existingFlight.pilot2Id}`);
         } catch (error) {
           console.error('Error decrementing pilot2 flight starts:', error);
         }
+      } else if (existingFlight.pilot2Id && !existingFlight.is_school_flight) {
       }
     }
 

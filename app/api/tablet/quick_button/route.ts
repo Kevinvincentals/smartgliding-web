@@ -200,9 +200,9 @@ export async function POST(request: NextRequest): Promise<NextResponse<QuickButt
       }
     }
 
-    // Increment pilot flight starts for both pilots if this is a takeoff action
+    // Increment pilot flight starts based on flight type if this is a takeoff action
     if (action === 'start') {
-      // For pilot1
+      // Always increment pilot1 (1. Pilot)
       if (existingFlight.pilot1Id) {
         try {
           await prisma.$runCommandRaw({
@@ -220,8 +220,8 @@ export async function POST(request: NextRequest): Promise<NextResponse<QuickButt
         }
       }
 
-      // For pilot2 (co-pilot)
-      if (existingFlight.pilot2Id) {
+      // Only increment pilot2 (2. Pilot) if it's a school flight
+      if (existingFlight.pilot2Id && existingFlight.is_school_flight) {
         try {
           await prisma.$runCommandRaw({
             update: "pilots",
@@ -232,10 +232,12 @@ export async function POST(request: NextRequest): Promise<NextResponse<QuickButt
               },
             ],
           });
-          console.log(`Incremented flight starts for pilot2 ID: ${existingFlight.pilot2Id}`);
+          console.log(`Incremented flight starts for pilot2 ID: ${existingFlight.pilot2Id} (school flight)`);
         } catch (error) {
           console.error('Error incrementing pilot2 flight starts:', error);
         }
+      } else if (existingFlight.pilot2Id && !existingFlight.is_school_flight) {
+        console.log(`Skipped incrementing flight starts for pilot2 ID: ${existingFlight.pilot2Id} (normal flight - only pilot1 gets credited)`);
       }
     }
 

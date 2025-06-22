@@ -143,6 +143,18 @@ const styles = StyleSheet.create({
     textAlign: 'center',
     paddingHorizontal: 2,
   },
+  tableCellMediumCenter: {
+    flex: 0.7,
+    fontSize: 9,
+    textAlign: 'center',
+    paddingHorizontal: 2,
+  },
+  tableCellWideCenter: {
+    flex: 1.4,
+    fontSize: 9,
+    textAlign: 'center',
+    paddingHorizontal: 2,
+  },
   footer: {
     position: 'absolute',
     bottom: 30,
@@ -265,10 +277,10 @@ export const createFlightListPdf = ({
               <Text style={styles.tableHeaderCell}>Reg</Text>
             </View>
             <View style={[styles.tableCellWide, styles.columnHeader]}>
-              <Text style={styles.tableHeaderCell}>Pilot</Text>
+              <Text style={styles.tableHeaderCell}>1. Pilot</Text>
             </View>
             <View style={[styles.tableCellWide, styles.columnHeader]}>
-              <Text style={styles.tableHeaderCell}>Bagsæde / Instr.</Text>
+              <Text style={styles.tableHeaderCell}>2. Pilot / Instruktør</Text>
             </View>
             <View style={[styles.tableCellNarrow, styles.columnHeader]}>
               <Text style={styles.tableHeaderCell}>Metode</Text>
@@ -291,11 +303,11 @@ export const createFlightListPdf = ({
           {flights.map((flight) => (
             <View key={flight.number} style={flight.isSchoolFlight ? styles.tableRowSchool : styles.tableRow}>
               <Text style={styles.tableCellCenter}>{flight.number}</Text>
-              <Text style={styles.tableCellMedium}>
+              <Text style={styles.tableCellMediumCenter}>
                 <Text style={styles.regText}>{flight.registration}</Text>
               </Text>
-              <Text style={styles.tableCellWide}>{flight.pilot1}</Text>
-              <Text style={styles.tableCellWide}>{flight.pilot2}</Text>
+              <Text style={styles.tableCellWideCenter}>{flight.pilot1}</Text>
+              <Text style={styles.tableCellWideCenter}>{flight.pilot2}</Text>
               <Text style={styles.tableCellCenter}>{flight.launchMethod}</Text>
               <Text style={styles.tableCellMedium}>{flight.feltDisplay || flight.takeoffAirfield || 'EKFS'}</Text>
               <Text style={styles.tableCellCenter}>{flight.takeoffTime}</Text>

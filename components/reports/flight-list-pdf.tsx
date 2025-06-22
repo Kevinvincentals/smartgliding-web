@@ -94,6 +94,16 @@ const styles = StyleSheet.create({
     flex: 1.5,
     fontSize: 10,
   },
+  tableCellCenter: {
+    flex: 1,
+    fontSize: 10,
+    textAlign: 'center',
+  },
+  tableCellWideCenter: {
+    flex: 1.5,
+    fontSize: 10,
+    textAlign: 'center',
+  },
   footer: {
     position: 'absolute',
     bottom: 30,
@@ -172,8 +182,8 @@ export const createFlightListPdf = ({ date, flights, totalFlights, totalFlightTi
             <Text style={styles.tableCellNarrow}>#</Text>
             <Text style={styles.tableCell}>Registrering</Text>
             <Text style={styles.tableCell}>Type</Text>
-            <Text style={styles.tableCellWide}>Pilot</Text>
-            <Text style={styles.tableCellWide}>Co-pilot</Text>
+            <Text style={styles.tableCellWide}>1. Pilot</Text>
+            <Text style={styles.tableCellWide}>2. Pilot / Instruktør</Text>
             <Text style={styles.tableCellNarrow}>Metode</Text>
             <Text style={styles.tableCellNarrow}>Start</Text>
             <Text style={styles.tableCellNarrow}>Landing</Text>
@@ -184,10 +194,10 @@ export const createFlightListPdf = ({ date, flights, totalFlights, totalFlightTi
           {flights.map((flight) => (
             <View key={flight.number} style={flight.isSchoolFlight ? styles.tableRowSchool : styles.tableRow}>
               <Text style={styles.tableCellNarrow}>{flight.number}</Text>
-              <Text style={styles.tableCell}>{flight.registration}</Text>
+              <Text style={styles.tableCellCenter}>{flight.registration}</Text>
               <Text style={styles.tableCell}>{flight.type}</Text>
-              <Text style={styles.tableCellWide}>{flight.pilot1}</Text>
-              <Text style={styles.tableCellWide}>{flight.pilot2}</Text>
+              <Text style={styles.tableCellWideCenter}>{flight.pilot1}</Text>
+              <Text style={styles.tableCellWideCenter}>{flight.pilot2}</Text>
               <Text style={styles.tableCellNarrow}>{flight.launchMethod}</Text>
               <Text style={styles.tableCellNarrow}>{flight.takeoffTime}</Text>
               <Text style={styles.tableCellNarrow}>{flight.landingTime}</Text>

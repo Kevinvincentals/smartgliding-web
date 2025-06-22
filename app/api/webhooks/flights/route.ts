@@ -306,8 +306,8 @@ async function handleFlightEvent(payload: z.infer<typeof flightEventSchema>) {
         }
       }
       
-      // Increment pilot flight starts for both pilots if they exist
-      // For pilot1
+      // Increment pilot flight starts based on flight type
+      // Always increment pilot1 (1. Pilot)
       if (pendingFlight.pilot1Id) {
         try {
           await prisma.$runCommandRaw({
@@ -325,8 +325,8 @@ async function handleFlightEvent(payload: z.infer<typeof flightEventSchema>) {
         }
       }
 
-      // For pilot2 (co-pilot)
-      if (pendingFlight.pilot2Id) {
+      // Only increment pilot2 (2. Pilot) if it's a school flight
+      if (pendingFlight.pilot2Id && pendingFlight.is_school_flight) {
         try {
           await prisma.$runCommandRaw({
             update: "pilots",
@@ -337,10 +337,12 @@ async function handleFlightEvent(payload: z.infer<typeof flightEventSchema>) {
               },
             ],
           });
-          console.log(`Incremented flight starts for pilot2 ID: ${pendingFlight.pilot2Id}`);
+          console.log(`Incremented flight starts for pilot2 ID: ${pendingFlight.pilot2Id} (school flight)`);
         } catch (error) {
           console.error('Error incrementing pilot2 flight starts:', error);
         }
+      } else if (pendingFlight.pilot2Id && !pendingFlight.is_school_flight) {
+        console.log(`Skipped incrementing flight starts for pilot2 ID: ${pendingFlight.pilot2Id} (normal flight - only pilot1 gets credited)`);
       }
       
       // Get complete flight data for WebSocket broadcast

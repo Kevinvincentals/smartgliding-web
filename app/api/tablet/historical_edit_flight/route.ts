@@ -396,7 +396,6 @@ export async function POST(request: NextRequest): Promise<NextResponse<UpdateHis
             },
           ],
         });
-        console.log(`Decremented start count for plane ID: ${existingFlight.planeId} (historical)`);
       } catch (error) {
         console.error('Error decrementing plane starts for historical flight:', error);
       }
@@ -452,7 +451,6 @@ export async function POST(request: NextRequest): Promise<NextResponse<UpdateHis
               },
             ],
           });
-          console.log(`Decremented flight starts for pilot1 ID: ${existingFlight.pilot1Id} (historical)`);
         } catch (error) {
           console.error('Error decrementing pilot1 flight starts for historical flight:', error);
         }
@@ -470,7 +468,6 @@ export async function POST(request: NextRequest): Promise<NextResponse<UpdateHis
               },
             ],
           });
-          console.log(`Decremented flight starts for pilot2 ID: ${existingFlight.pilot2Id} (historical)`);
         } catch (error) {
           console.error('Error decrementing pilot2 flight starts for historical flight:', error);
         }

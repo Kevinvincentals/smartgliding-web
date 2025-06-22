@@ -1050,7 +1050,7 @@ function Statistics({ socket, wsConnected, authenticatedChannel }: StatisticsPro
                                   <th className="py-3 px-4 text-left font-medium text-slate-600 w-12">#</th>
                                   <th className="py-3 px-4 text-left font-medium text-slate-600 w-28">Reg</th>
                                   <th className="py-3 px-4 text-left font-medium text-slate-600">Pilot</th>
-                                  <th className="py-3 px-4 text-left font-medium text-slate-600">Bagsæde / Instr.</th>
+                                  <th className="py-3 px-4 text-left font-medium text-slate-600">2. Pilot / Instruktør</th>
                                   <th className="py-3 px-4 text-left font-medium text-slate-600 w-20">Metode</th>
                                   <th className="py-3 px-4 text-left font-medium text-slate-600">Start/Land</th>
                                   <th className="py-3 px-4 text-left font-medium text-slate-600 w-20">Start</th>

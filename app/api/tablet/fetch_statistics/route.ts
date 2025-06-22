@@ -175,7 +175,13 @@ export async function GET(request: NextRequest): Promise<NextResponse<Statistics
         // Date conditions
         dateConditions,
         // Not deleted
-        { deleted: false }
+        { deleted: false },
+        // Only include flights that have actually happened (INFLIGHT or LANDED)
+        {
+          status: {
+            in: ['INFLIGHT', 'LANDED']
+          }
+        }
       ],
       // Either match club OR match airfield (same logic as fetch_flights)
       OR: [
@@ -609,8 +615,8 @@ export async function GET(request: NextRequest): Promise<NextResponse<Statistics
           }
         }
         
-        // Process pilot2
-        if (flight.pilot2) {
+        // Process pilot2 - only count for school flights
+        if (flight.pilot2 && isSchoolFlight) {
           const pilotId = flight.pilot2.id;
           const pilotName = `${flight.pilot2.firstname} ${flight.pilot2.lastname}`;
           
@@ -629,6 +635,7 @@ export async function GET(request: NextRequest): Promise<NextResponse<Statistics
             };
           }
           
+          // Only count flight statistics for pilot2 in school flights
           pilotStats[pilotId].flightCount++;
           
           // Add flight distance if available
@@ -645,11 +652,8 @@ export async function GET(request: NextRequest): Promise<NextResponse<Statistics
             pilotStats[pilotId].maxSpeed = flight.max_speed;
           }
           
-          // Count school flights appropriately
-          if (isSchoolFlight) {
-            // For pilot2 in a school flight, they're typically the instructor
-            pilotStats[pilotId].instructorFlights++;
-          }
+          // For pilot2 in a school flight, they're typically the instructor
+          pilotStats[pilotId].instructorFlights++;
           
           if (flight.takeoff_time && flight.landing_time) {
             // Update to use the same calculation method as above
@@ -668,8 +672,8 @@ export async function GET(request: NextRequest): Promise<NextResponse<Statistics
             
             pilotStats[pilotId].flightTimeMinutes += durationMinutes;
           }
-        } else if (flight.guest_pilot2_name) {
-          // Process guest pilot2 - Normalize the name to handle case insensitivity
+        } else if (flight.guest_pilot2_name && isSchoolFlight) {
+          // Process guest pilot2 - only count for school flights
           const normalizedName = flight.guest_pilot2_name.trim().toLowerCase();
           const guestId = `guest_${normalizedName}`;
           
@@ -688,6 +692,7 @@ export async function GET(request: NextRequest): Promise<NextResponse<Statistics
             };
           }
           
+          // Only count flight statistics for guest pilot2 in school flights
           pilotStats[guestId].flightCount++;
           
           // Add flight distance if available
@@ -704,10 +709,8 @@ export async function GET(request: NextRequest): Promise<NextResponse<Statistics
             pilotStats[guestId].maxSpeed = flight.max_speed;
           }
           
-          // Count school flights appropriately
-          if (isSchoolFlight) {
-            pilotStats[guestId].instructorFlights++;
-          }
+          // For guest pilot2 in a school flight, they're typically the instructor
+          pilotStats[guestId].instructorFlights++;
           
           if (flight.takeoff_time && flight.landing_time) {
             // Update to use the same calculation method as above

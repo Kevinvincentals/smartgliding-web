@@ -168,8 +168,6 @@ export async function GET(request: NextRequest): Promise<NextResponse<PilotsApiR
         .sort((a, b) => a.name.localeCompare(b.name));
       
       // Log the sorting results for debugging
-      console.log(`Pilot sorting - Club: ${clubId}, Recent flyers (top 12):`, 
-        topRecentPilots.map(p => `${p.name} (${p.lastFlightDate?.toISOString().split('T')[0] || 'unknown'})`));
       
       // Combine: top 12 recent pilots first, then alphabetical rest
       combinedPilots = [...topRecentPilots, ...remainingPilots]
