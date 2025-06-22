@@ -4,6 +4,7 @@ import type { JWTPayload, ApiResponse } from '@/types/tablet-api'
 import type { LaunchMethod } from '@/types/flight'
 import { createFlightRequestSchema, validateRequestBody } from '@/lib/validations/tablet-api'
 import { getStartOfTimezoneDayUTC, getEndOfTimezoneDayUTC, localTimeStringToUTC } from '@/lib/time-utils'
+import { FlightStatus } from '@prisma/client'
 
 /**
  * Historical flight creation response
@@ -127,7 +128,7 @@ export async function POST(request: NextRequest): Promise<NextResponse> {
     // Convert times if provided
     let takeoffTimeUTC = null;
     let landingTimeUTC = null;
-    let flightStatus = 'PENDING';
+    let flightStatus: FlightStatus = FlightStatus.PENDING;
     
     if (takeoffTime) {
       takeoffTimeUTC = localTimeStringToUTC(takeoffTime);
@@ -136,7 +137,7 @@ export async function POST(request: NextRequest): Promise<NextResponse> {
         const historicalTakeoff = new Date(targetDate);
         historicalTakeoff.setHours(takeoffTimeUTC.getHours(), takeoffTimeUTC.getMinutes(), takeoffTimeUTC.getSeconds());
         takeoffTimeUTC = historicalTakeoff;
-        flightStatus = 'INFLIGHT';
+        flightStatus = FlightStatus.INFLIGHT;
       }
     }
     
@@ -148,9 +149,9 @@ export async function POST(request: NextRequest): Promise<NextResponse> {
         historicalLanding.setHours(landingTimeUTC.getHours(), landingTimeUTC.getMinutes(), landingTimeUTC.getSeconds());
         landingTimeUTC = historicalLanding;
         if (takeoffTimeUTC) {
-          flightStatus = 'COMPLETED';
+          flightStatus = FlightStatus.COMPLETED;
         } else {
-          flightStatus = 'LANDED';
+          flightStatus = FlightStatus.LANDED;
         }
       }
     }
