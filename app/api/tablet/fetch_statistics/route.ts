@@ -176,10 +176,10 @@ export async function GET(request: NextRequest): Promise<NextResponse<Statistics
         dateConditions,
         // Not deleted
         { deleted: false },
-        // Only include flights that have actually happened (INFLIGHT or LANDED)
+        // Only include flights that have actually happened (INFLIGHT, LANDED, or COMPLETED)
         {
           status: {
-            in: ['INFLIGHT', 'LANDED']
+            in: ['INFLIGHT', 'LANDED', 'COMPLETED']
           }
         }
       ],
