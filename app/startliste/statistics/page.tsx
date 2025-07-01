@@ -65,6 +65,15 @@ interface PilotStat {
   flightMinutes: number;
   instructorFlights: number;
   studentFlights: number;
+  soloFlights: number;
+  instructorTimeMinutes: number;
+  normalTimeMinutes: number;
+  instructorTime: string;
+  instructorHours: number;
+  instructorMinutesFormatted: number;
+  normalTime: string;
+  normalHours: number;
+  normalMinutesFormatted: number;
   totalDistance?: number;
   maxAltitude?: number;
   maxSpeed?: number;
@@ -1190,80 +1199,102 @@ function Statistics({ socket, wsConnected, authenticatedChannel }: StatisticsPro
                           {getFilteredSortedPilots(currentStats.pilots).map(pilot => (
                         <div 
                           key={pilot.id} 
-                          className="flex flex-col p-3 bg-slate-50 rounded-lg border-l-4 border-blue-500 shadow-sm"
+                          className="bg-white rounded-lg border border-slate-200 shadow-sm hover:shadow-md transition-shadow overflow-hidden"
                         >
-                          <div className="flex justify-between items-start">
-                            <div className="flex items-center">
-                              <Users className="h-6 w-6 text-blue-500 mr-3" />
-                              <div>
-                                <div className="text-base font-bold flex items-center">
-                                  {pilot.name}
-                                  {pilot.isGuest && 
-                                    <Badge className="ml-2 text-xs">Gæst</Badge>
+                          {/* Header */}
+                          <div className="bg-slate-50 px-4 py-3 border-b border-slate-200">
+                            <div className="flex items-center gap-2">
+                              <Users className="h-5 w-5 text-slate-600" />
+                              <span className="text-lg font-bold text-slate-900">{pilot.name}</span>
+                              {pilot.isGuest && 
+                                <Badge className="ml-2 text-xs">Gæst</Badge>
+                              }
+                            </div>
+                          </div>
+
+                          {/* Main content */}
+                          <div className="p-4 space-y-4">
+                            {/* Top row: Basic stats */}
+                            <div className="grid grid-cols-2 gap-4">
+                              <div className="text-center">
+                                <div className="text-2xl sm:text-3xl font-bold text-blue-600">{pilot.flightCount}</div>
+                                <div className="text-sm font-medium text-slate-600 uppercase tracking-wide">
+                                  {pilot.flightCount === 1 ? 'Start' : 'Starter'}
+                                </div>
+                              </div>
+                              <div className="text-center">
+                                <div className="text-2xl sm:text-3xl font-bold text-slate-700 whitespace-nowrap">
+                                  {formatTime(pilot.flightHours, pilot.flightMinutes)}
+                                </div>
+                                <div className="text-sm font-medium text-slate-600 uppercase tracking-wide">Tid</div>
+                              </div>
+                            </div>
+
+                            {/* Start breakdown */}
+                            {(pilot.instructorFlights > 0 || pilot.soloFlights > 0) && (
+                              <div className="bg-slate-50 rounded-lg p-3">
+                                <div className="text-xs font-medium text-slate-500 uppercase tracking-wide mb-2">Start fordeling</div>
+                                <div className="grid grid-cols-2 gap-3">
+                                  <div className="text-center">
+                                    <div className="text-lg font-bold text-emerald-600">{pilot.instructorFlights}</div>
+                                    <div className="text-xs text-emerald-600 font-medium">Instruktør</div>
+                                  </div>
+                                  <div className="text-center">
+                                    <div className="text-lg font-bold text-blue-600">{pilot.soloFlights}</div>
+                                    <div className="text-xs text-blue-600 font-medium">Alene</div>
+                                  </div>
+                                </div>
+                              </div>
+                            )}
+
+                            {/* Flight time breakdown */}
+                            {pilot.instructorTimeMinutes > 0 && pilot.normalTimeMinutes > 0 && (
+                              <div className="bg-slate-50 rounded-lg p-3">
+                                <div className="text-xs font-medium text-slate-500 uppercase tracking-wide mb-2">Flyvetid fordeling</div>
+                                <div className="grid grid-cols-2 gap-3">
+                                  <div className="text-center">
+                                    <div className="text-lg font-bold text-emerald-600">{pilot.instructorTime}</div>
+                                    <div className="text-xs text-emerald-600 font-medium">Instruktør</div>
+                                  </div>
+                                  <div className="text-center">
+                                    <div className="text-lg font-bold text-blue-600">{pilot.normalTime}</div>
+                                    <div className="text-xs text-blue-600 font-medium">Alene</div>
+                                  </div>
+                                </div>
+                              </div>
+                            )}
+
+                            {/* Performance stats */}
+                            <div className="grid grid-cols-3 gap-4 pt-2 border-t border-slate-200">
+                              <div className="text-center">
+                                <div className="text-sm font-bold text-slate-700">
+                                  {pilot.totalDistance && pilot.totalDistance > 0 ? 
+                                    `${pilot.totalDistance.toFixed(1)} km` : 
+                                    "-"
                                   }
                                 </div>
-                                <div className="flex items-center gap-3 mt-1">
-                                  <span className="text-sm font-medium">
-                                    {pilot.flightCount} {pilot.flightCount === 1 ? 'start' : 'starter'}
-                                  </span>
-                                  
-                                  <Badge variant="secondary" className="text-sm font-medium px-2 py-0.5">
-                                    {formatTime(pilot.flightHours, pilot.flightMinutes)}
-                                  </Badge>
+                                <div className="text-xs text-slate-500">Distance</div>
+                              </div>
+                              <div className="text-center">
+                                <div className="text-sm font-bold text-slate-700">
+                                  {pilot.maxAltitude && pilot.maxAltitude > 0 ? 
+                                    `${pilot.maxAltitude.toFixed(0)} m` : 
+                                    "-"
+                                  }
                                 </div>
+                                <div className="text-xs text-slate-500">Max højde</div>
+                              </div>
+                              <div className="text-center">
+                                <div className="text-sm font-bold text-slate-700">
+                                  {pilot.maxSpeed && pilot.maxSpeed > 0 ? 
+                                    `${pilot.maxSpeed.toFixed(0)} km/t` : 
+                                    "-"
+                                  }
+                                </div>
+                                <div className="text-xs text-slate-500">Max hastighed</div>
                               </div>
                             </div>
                           </div>
-                          
-                              <div className="mt-2 pt-2 border-t border-slate-200 grid grid-cols-1 gap-2">
-                            {(pilot.instructorFlights > 0 || pilot.studentFlights > 0) && (
-                              <div className="flex items-center text-emerald-700">
-                                <GraduationCap className="h-4 w-4 mr-1.5" />
-                                <span className="text-sm">
-                                  {pilot.instructorFlights > 0 ? `${pilot.instructorFlights} som instruktør` : 
-                                   pilot.studentFlights > 0 ? `${pilot.studentFlights} som elev` : ''}
-                                </span>
-                              </div>
-                            )}
-                            
-                            {pilot.totalDistance && pilot.totalDistance > 0 && (
-                              <div className="flex items-center text-blue-600">
-                                <Ruler className="h-4 w-4 mr-1.5" />
-                                <span className="text-sm">
-                                  {`${pilot.totalDistance.toFixed(1)} km i alt`}
-                                </span>
-                              </div>
-                            )}
-                          </div>
-                          
-                          {/* Only show performance stats section if we have altitude or speed data */}
-                          {((pilot.maxAltitude && pilot.maxAltitude > 0) || (pilot.maxSpeed && pilot.maxSpeed > 0)) && (
-                            <div className="mt-2 pt-2 border-t border-slate-200 grid grid-cols-1 md:grid-cols-2 gap-2">
-                              {pilot.maxAltitude && pilot.maxAltitude > 0 && (
-                                <div className="flex items-center">
-                                  <div className="flex items-center justify-center h-6 w-6 rounded-full bg-blue-100">
-                                    <ArrowUp className="h-3 w-3 text-blue-600" />
-                                  </div>
-                                  <div className="ml-2">
-                                    <div className="text-xs text-muted-foreground">Max højde</div>
-                                    <div className="text-sm font-medium">{pilot.maxAltitude.toFixed(0)} m</div>
-                                  </div>
-                                </div>
-                              )}
-                              
-                              {pilot.maxSpeed && pilot.maxSpeed > 0 && (
-                                <div className="flex items-center">
-                                  <div className="flex items-center justify-center h-6 w-6 rounded-full bg-amber-100">
-                                    <Wind className="h-3 w-3 text-amber-600" />
-                                  </div>
-                                  <div className="ml-2">
-                                    <div className="text-xs text-muted-foreground">Max hastighed</div>
-                                    <div className="text-sm font-medium">{pilot.maxSpeed.toFixed(0)} km/t</div>
-                                  </div>
-                                </div>
-                              )}
-                            </div>
-                          )}
                         </div>
                       ))}
                     </div>
@@ -1295,26 +1326,64 @@ function Statistics({ socket, wsConnected, authenticatedChannel }: StatisticsPro
                                       {pilot.name}
                                       {pilot.isGuest && <span className="ml-2 text-xs text-slate-500">(Gæst)</span>}
                                     </td>
-                                    <td className="py-3 px-4">
-                                      {pilot.flightCount}
+                                    <td className="py-3 px-4 font-medium">
+                                      <div className="flex flex-col">
+                                        <div className="font-bold text-lg text-slate-900">
+                                          {pilot.flightCount}
+                                        </div>
+                                        {/* Only show breakdown if pilot has BOTH instructor and solo starts */}
+                                        {pilot.instructorFlights > 0 && pilot.soloFlights > 0 && (
+                                          <div className="mt-2 space-y-1 text-sm">
+                                            <div className="flex items-center gap-2">
+                                              <span className="font-medium text-emerald-700">Instruktør:</span>
+                                              <span className="font-medium">{pilot.instructorFlights}</span>
+                                            </div>
+                                            <div className="flex items-center gap-2">
+                                              <span className="font-medium text-blue-700">Alene:</span>
+                                              <span className="font-medium">{pilot.soloFlights}</span>
+                                            </div>
+                                          </div>
+                                        )}
+                                      </div>
                                     </td>
                                     <td className="py-3 px-4 font-medium">
-                                      {formatTime(pilot.flightHours, pilot.flightMinutes)}
+                                      <div className="flex flex-col">
+                                        <div className="font-bold text-lg text-slate-900">
+                                          {formatTime(pilot.flightHours, pilot.flightMinutes)}
+                                        </div>
+                                        {/* Only show breakdown if pilot has BOTH instructor and normal time */}
+                                        {pilot.instructorTimeMinutes > 0 && pilot.normalTimeMinutes > 0 && (
+                                          <div className="mt-2 space-y-1 text-sm">
+                                            <div className="flex items-center gap-2">
+                                              <span className="font-medium text-emerald-700">Instruktør:</span>
+                                              <span className="font-medium">{pilot.instructorTime}</span>
+                                            </div>
+                                            <div className="flex items-center gap-2">
+                                              <span className="font-medium text-blue-700">Alene:</span>
+                                              <span className="font-medium">{pilot.normalTime}</span>
+                                            </div>
+                                          </div>
+                                        )}
+                                      </div>
                                     </td>
                                     <td className="py-3 px-4">
-                                      {pilot.instructorFlights > 0 ? (
-                                        <div className="flex items-center">
-                                          <GraduationCap className="h-4 w-4 mr-1.5 text-emerald-600" />
-                                          <span>{pilot.instructorFlights} som instruktør</span>
-                                        </div>
-                                      ) : pilot.studentFlights > 0 ? (
-                                        <div className="flex items-center">
-                                          <GraduationCap className="h-4 w-4 mr-1.5 text-blue-600" />
-                                          <span>{pilot.studentFlights} som elev</span>
-                                        </div>
-                                      ) : (
-                                        "-"
-                                      )}
+                                      <div className="space-y-1">
+                                        {pilot.instructorFlights > 0 && (
+                                          <div className="flex items-center">
+                                            <GraduationCap className="h-4 w-4 mr-1.5 text-emerald-600" />
+                                            <span className="text-sm font-medium">{pilot.instructorFlights} starter som instruktør</span>
+                                          </div>
+                                        )}
+                                        {pilot.studentFlights > 0 && (
+                                          <div className="flex items-center">
+                                            <GraduationCap className="h-4 w-4 mr-1.5 text-blue-600" />
+                                            <span className="text-sm font-medium">{pilot.studentFlights} starter som elev</span>
+                                          </div>
+                                        )}
+                                        {pilot.instructorFlights === 0 && pilot.studentFlights === 0 && (
+                                          "-"
+                                        )}
+                                      </div>
                                     </td>
                                     <td className="py-3 px-4">
                                       {pilot.totalDistance && pilot.totalDistance > 0 ? 

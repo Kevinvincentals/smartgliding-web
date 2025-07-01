@@ -510,6 +510,9 @@ export async function GET(request: NextRequest): Promise<NextResponse<Statistics
               flightTimeMinutes: 0,
               instructorFlights: 0,
               studentFlights: 0,
+              soloFlights: 0,
+              instructorTimeMinutes: 0,
+              normalTimeMinutes: 0,
               totalDistance: 0,
               maxAltitude: 0,
               maxSpeed: 0
@@ -536,6 +539,9 @@ export async function GET(request: NextRequest): Promise<NextResponse<Statistics
           if (isSchoolFlight) {
             // For pilot1 in a school flight, they're typically the student
             pilotStats[pilotId].studentFlights++;
+          } else {
+            // For pilot1 in a non-school flight, they're flying solo
+            pilotStats[pilotId].soloFlights++;
           }
           
           if (flight.takeoff_time && flight.landing_time) {
@@ -554,6 +560,9 @@ export async function GET(request: NextRequest): Promise<NextResponse<Statistics
             if (durationMinutes < 0) durationMinutes += 24 * 60; // Handle overnight flights
             
             pilotStats[pilotId].flightTimeMinutes += durationMinutes;
+            
+            // For pilot1: all time is normal time (not instructor time)
+            pilotStats[pilotId].normalTimeMinutes += durationMinutes;
           }
         } else if (flight.guest_pilot1_name) {
           // Process guest pilot1 - Normalize the name to handle case insensitivity
@@ -569,6 +578,9 @@ export async function GET(request: NextRequest): Promise<NextResponse<Statistics
               flightTimeMinutes: 0,
               instructorFlights: 0,
               studentFlights: 0,
+              soloFlights: 0,
+              instructorTimeMinutes: 0,
+              normalTimeMinutes: 0,
               totalDistance: 0,
               maxAltitude: 0,
               maxSpeed: 0
@@ -594,6 +606,9 @@ export async function GET(request: NextRequest): Promise<NextResponse<Statistics
           // Count school flights appropriately
           if (isSchoolFlight) {
             pilotStats[guestId].studentFlights++;
+          } else {
+            // For guest pilot1 in a non-school flight, they're flying solo
+            pilotStats[guestId].soloFlights++;
           }
           
           if (flight.takeoff_time && flight.landing_time) {
@@ -612,6 +627,9 @@ export async function GET(request: NextRequest): Promise<NextResponse<Statistics
             if (durationMinutes < 0) durationMinutes += 24 * 60; // Handle overnight flights
             
             pilotStats[guestId].flightTimeMinutes += durationMinutes;
+            
+            // For guest pilot1: all time is normal time (not instructor time)
+            pilotStats[guestId].normalTimeMinutes += durationMinutes;
           }
         }
         
@@ -629,6 +647,9 @@ export async function GET(request: NextRequest): Promise<NextResponse<Statistics
               flightTimeMinutes: 0,
               instructorFlights: 0,
               studentFlights: 0,
+              soloFlights: 0,
+              instructorTimeMinutes: 0,
+              normalTimeMinutes: 0,
               totalDistance: 0,
               maxAltitude: 0,
               maxSpeed: 0
@@ -671,6 +692,9 @@ export async function GET(request: NextRequest): Promise<NextResponse<Statistics
             if (durationMinutes < 0) durationMinutes += 24 * 60; // Handle overnight flights
             
             pilotStats[pilotId].flightTimeMinutes += durationMinutes;
+            
+            // For pilot2 in school flight: this is instructor time
+            pilotStats[pilotId].instructorTimeMinutes += durationMinutes;
           }
         } else if (flight.guest_pilot2_name && isSchoolFlight) {
           // Process guest pilot2 - only count for school flights
@@ -686,6 +710,9 @@ export async function GET(request: NextRequest): Promise<NextResponse<Statistics
               flightTimeMinutes: 0,
               instructorFlights: 0,
               studentFlights: 0,
+              soloFlights: 0,
+              instructorTimeMinutes: 0,
+              normalTimeMinutes: 0,
               totalDistance: 0,
               maxAltitude: 0,
               maxSpeed: 0
@@ -728,6 +755,9 @@ export async function GET(request: NextRequest): Promise<NextResponse<Statistics
             if (durationMinutes < 0) durationMinutes += 24 * 60; // Handle overnight flights
             
             pilotStats[guestId].flightTimeMinutes += durationMinutes;
+            
+            // For guest pilot2 in school flight: this is instructor time
+            pilotStats[guestId].instructorTimeMinutes += durationMinutes;
           }
         }
       });
@@ -736,11 +766,24 @@ export async function GET(request: NextRequest): Promise<NextResponse<Statistics
       const formattedPilotStats = Object.values(pilotStats).map((pilot: any) => {
         const hours = Math.floor(pilot.flightTimeMinutes / 60);
         const minutes = pilot.flightTimeMinutes % 60;
+        
+        const instructorHours = Math.floor(pilot.instructorTimeMinutes / 60);
+        const instructorMinutes = pilot.instructorTimeMinutes % 60;
+        
+        const normalHours = Math.floor(pilot.normalTimeMinutes / 60);
+        const normalMinutes = pilot.normalTimeMinutes % 60;
+        
         return {
           ...pilot,
           flightTime: `${hours}:${minutes.toString().padStart(2, '0')}`,
           flightHours: hours,
-          flightMinutes: minutes
+          flightMinutes: minutes,
+          instructorTime: `${instructorHours}:${instructorMinutes.toString().padStart(2, '0')}`,
+          instructorHours: instructorHours,
+          instructorMinutesFormatted: instructorMinutes,
+          normalTime: `${normalHours}:${normalMinutes.toString().padStart(2, '0')}`,
+          normalHours: normalHours,
+          normalMinutesFormatted: normalMinutes
         };
       }).sort((a: any, b: any) => b.flightCount - a.flightCount);
 
