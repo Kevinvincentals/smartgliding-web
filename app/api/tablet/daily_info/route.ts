@@ -35,25 +35,21 @@ interface DailyInfoApiResponse extends ApiResponse {
       id: string
       firstname: string
       lastname: string
-      email?: string
     } | null
     trafficLeader2?: {
       id: string
       firstname: string
       lastname: string
-      email?: string
     } | null
     towPerson?: {
       id: string
       firstname: string
       lastname: string
-      email?: string
     } | null
     towPerson2?: {
       id: string
       firstname: string
       lastname: string
-      email?: string
     } | null
   }
 }
@@ -78,32 +74,28 @@ async function getOrCreateDailyInfo(clubId: string, date = new Date()) {
         select: {
           id: true,
           firstname: true,
-          lastname: true,
-          email: true
+          lastname: true
         }
       },
       trafficLeader2: {
         select: {
           id: true,
           firstname: true,
-          lastname: true,
-          email: true
+          lastname: true
         }
       },
       towPerson: {
         select: {
           id: true,
           firstname: true,
-          lastname: true,
-          email: true
+          lastname: true
         }
       },
       towPerson2: {
         select: {
           id: true,
           firstname: true,
-          lastname: true,
-          email: true
+          lastname: true
         }
       }
     }
@@ -135,7 +127,6 @@ async function getOrCreateDailyInfo(clubId: string, date = new Date()) {
             id: true,
             firstname: true,
             lastname: true,
-            email: true
           }
         },
         trafficLeader2: {
@@ -143,7 +134,6 @@ async function getOrCreateDailyInfo(clubId: string, date = new Date()) {
             id: true,
             firstname: true,
             lastname: true,
-            email: true
           }
         },
         towPerson: {
@@ -151,7 +141,6 @@ async function getOrCreateDailyInfo(clubId: string, date = new Date()) {
             id: true,
             firstname: true,
             lastname: true,
-            email: true
           }
         },
         towPerson2: {
@@ -159,7 +148,6 @@ async function getOrCreateDailyInfo(clubId: string, date = new Date()) {
             id: true,
             firstname: true,
             lastname: true,
-            email: true
           }
         }
       }
@@ -351,7 +339,6 @@ export async function POST(request: NextRequest): Promise<NextResponse<DailyInfo
             id: true,
             firstname: true,
             lastname: true,
-            email: true
           }
         },
         trafficLeader2: {
@@ -359,7 +346,6 @@ export async function POST(request: NextRequest): Promise<NextResponse<DailyInfo
             id: true,
             firstname: true,
             lastname: true,
-            email: true
           }
         },
         towPerson: {
@@ -367,7 +353,6 @@ export async function POST(request: NextRequest): Promise<NextResponse<DailyInfo
             id: true,
             firstname: true,
             lastname: true,
-            email: true
           }
         },
         towPerson2: {
@@ -375,7 +360,6 @@ export async function POST(request: NextRequest): Promise<NextResponse<DailyInfo
             id: true,
             firstname: true,
             lastname: true,
-            email: true
           }
         }
       }

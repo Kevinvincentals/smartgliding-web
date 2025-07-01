@@ -414,7 +414,7 @@ export async function POST(request: NextRequest): Promise<NextResponse<ApiRespon
     }
 
     // Check if pilot email already exists
-    const existingPilot = await prisma.pilot.findUnique({
+    const existingPilot = await prisma.pilot.findFirst({
       where: { email: pilotData.email }
     });
 

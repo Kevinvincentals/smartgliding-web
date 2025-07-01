@@ -9,20 +9,24 @@ const clubIdSchema = z.object({
 
 export async function GET(request: Request) {
   try {
-    // Get user ID and admin status from headers (set by middleware)
-    const userId = request.headers.get('x-user-id')
-    const isAdmin = request.headers.get('x-user-is-admin') === 'true'
-    
-    if (!userId) {
+    // Get admin JWT payload from middleware (admin authentication)
+    const adminJwtPayload = request.headers.get('x-admin-jwt-payload')
+    if (!adminJwtPayload) {
       return NextResponse.json(
-        { error: 'User ID not found in request' },
-        { status: 500 }
+        { error: 'Admin authentication required' },
+        { status: 401 }
       )
     }
-    
-    // Get club ID from URL search params
-    const { searchParams } = new URL(request.url)
-    const clubId = searchParams.get('clubId')
+
+    const payload = JSON.parse(adminJwtPayload)
+    const clubId = payload.adminContext?.clubId
+
+    if (!clubId) {
+      return NextResponse.json(
+        { error: 'Club ID not found in admin session' },
+        { status: 400 }
+      )
+    }
 
     // Validate club ID
     const validatedData = clubIdSchema.parse({ clubId })
@@ -42,7 +46,7 @@ export async function GET(request: Request) {
       )
     }
 
-    // Fetch all planes for the club
+    // Fetch all planes for the club with their latest flight information
     const planes = await prisma.plane.findMany({
       where: {
         clubId: validatedData.clubId
@@ -53,17 +57,35 @@ export async function GET(request: Request) {
             id: true,
             name: true
           }
+        },
+        flightLogs: {
+          select: {
+            takeoff_time: true
+          },
+          orderBy: {
+            takeoff_time: 'desc'
+          },
+          take: 1
         }
-      },
-      orderBy: {
-        registration_id: 'asc'
       }
+    })
+
+    // Sort planes by last flight date (most recent first, nulls last)
+    const sortedPlanes = planes.sort((a, b) => {
+      const aLastFlight = a.flightLogs[0]?.takeoff_time
+      const bLastFlight = b.flightLogs[0]?.takeoff_time
+      
+      if (!aLastFlight && !bLastFlight) return a.registration_id.localeCompare(b.registration_id)
+      if (!aLastFlight) return 1 // a goes to end
+      if (!bLastFlight) return -1 // b goes to end
+      
+      return new Date(bLastFlight).getTime() - new Date(aLastFlight).getTime()
     })
 
     return NextResponse.json(
       { 
         message: 'Planes fetched successfully',
-        planes
+        planes: sortedPlanes
       },
       { status: 200 }
     )

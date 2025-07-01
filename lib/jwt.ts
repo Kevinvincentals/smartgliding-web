@@ -11,6 +11,15 @@ interface ClubMembershipForToken { // Renamed to avoid conflict if ClubMembershi
   role: 'ADMIN' | 'USER' // Or other roles you might have
 }
 
+// Admin context for audit logging and authorization
+interface AdminContext {
+  clubId: string;
+  clubName: string;
+  pilotId: string;
+  pilotName: string;
+  sessionType: 'club_admin';
+}
+
 export interface JWTPayload extends JoseJWTPayload {
   // Common fields for all JWTs
   id: string; // For users: pilotId, For tablets: clubId
@@ -23,7 +32,10 @@ export interface JWTPayload extends JoseJWTPayload {
   // Fields primarily for tablet JWTs (make optional if not in user JWTs)
   clubId?: string; // Can be redundant if `id` is always clubId for tablets
   homefield?: string | null;
-  // You could also add a 'token_type': 'user' | 'tablet' field if needed for differentiation
+  
+  // Admin context for club admin sessions
+  adminContext?: AdminContext;
+  // You could also add a 'token_type': 'user' | 'tablet' | 'admin' field if needed for differentiation
 }
 
 export async function generateTokens(payload: JWTPayload) {

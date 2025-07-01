@@ -6,23 +6,33 @@ import { z } from 'zod'
 const updatePlaneSchema = z.object({
   planeId: z.string().min(1, 'Plane ID is required'),
   registration_id: z.string().min(1, 'Registration ID is required').optional(),
-  flarm_id: z.string().optional(),
-  competition_id: z.string().optional(),
+  flarm_id: z.string().nullable().optional(),
+  competition_id: z.string().nullable().optional(),
   type: z.string().min(1, 'Type is required').optional(),
   is_twoseater: z.boolean().optional(),
-  year_produced: z.number().int().optional(),
-  notes: z.string().optional()
+  is_guest: z.boolean().optional(),
+  year_produced: z.number().int().nullable().optional(),
+  notes: z.string().nullable().optional()
 })
 
-export async function PUT(request: Request) {
+export async function POST(request: Request) {
   try {
-    // Get user ID from headers (set by middleware)
-    const userId = request.headers.get('x-user-id')
-    
-    if (!userId) {
+    // Get admin JWT payload from middleware (admin authentication)
+    const adminJwtPayload = request.headers.get('x-admin-jwt-payload')
+    if (!adminJwtPayload) {
       return NextResponse.json(
-        { error: 'User ID not found in request' },
-        { status: 500 }
+        { error: 'Admin authentication required' },
+        { status: 401 }
+      )
+    }
+
+    const payload = JSON.parse(adminJwtPayload)
+    const clubId = payload.adminContext?.clubId
+
+    if (!clubId) {
+      return NextResponse.json(
+        { error: 'Club ID not found in admin session' },
+        { status: 400 }
       )
     }
     
@@ -30,7 +40,7 @@ export async function PUT(request: Request) {
     const body = await request.json()
     const validatedData = updatePlaneSchema.parse(body)
 
-    // Get the plane
+    // Get the plane and verify it belongs to this club
     const plane = await prisma.plane.findUnique({
       where: { id: validatedData.planeId }
     })
@@ -42,25 +52,9 @@ export async function PUT(request: Request) {
       )
     }
 
-    // Check if user is a club admin or system admin
-    const clubAdmin = await prisma.clubPilot.findFirst({
-      where: {
-        pilotId: userId,
-        clubId: plane.clubId,
-        role: 'ADMIN'
-      }
-    })
-
-    const systemAdmin = await prisma.pilot.findUnique({
-      where: { 
-        id: userId,
-        is_admin: true
-      }
-    })
-
-    if (!clubAdmin && !systemAdmin) {
+    if (plane.clubId !== clubId) {
       return NextResponse.json(
-        { error: 'Unauthorized: You must be a club admin or system admin' },
+        { error: 'Plane does not belong to this club' },
         { status: 403 }
       )
     }
@@ -79,18 +73,22 @@ export async function PUT(request: Request) {
       }
     }
 
+    // Prepare update data (only include fields that are provided)
+    const updateData: any = {}
+    
+    if (validatedData.registration_id !== undefined) updateData.registration_id = validatedData.registration_id
+    if (validatedData.flarm_id !== undefined) updateData.flarm_id = validatedData.flarm_id
+    if (validatedData.competition_id !== undefined) updateData.competition_id = validatedData.competition_id
+    if (validatedData.type !== undefined) updateData.type = validatedData.type
+    if (validatedData.is_twoseater !== undefined) updateData.is_twoseater = validatedData.is_twoseater
+    if (validatedData.is_guest !== undefined) updateData.is_guest = validatedData.is_guest
+    if (validatedData.year_produced !== undefined) updateData.year_produced = validatedData.year_produced
+    if (validatedData.notes !== undefined) updateData.notes = validatedData.notes
+
     // Update the plane
     const updatedPlane = await prisma.plane.update({
       where: { id: validatedData.planeId },
-      data: {
-        registration_id: validatedData.registration_id,
-        flarm_id: validatedData.flarm_id,
-        competition_id: validatedData.competition_id,
-        type: validatedData.type,
-        is_twoseater: validatedData.is_twoseater,
-        year_produced: validatedData.year_produced,
-        notes: validatedData.notes
-      },
+      data: updateData,
       include: {
         club: {
           select: {

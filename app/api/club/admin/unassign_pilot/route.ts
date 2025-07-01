@@ -4,19 +4,27 @@ import { z } from 'zod'
 
 // Validation schema for unassigning a pilot
 const unassignPilotSchema = z.object({
-  pilotId: z.string().min(1, 'Pilot ID is required'),
-  clubId: z.string().min(1, 'Club ID is required')
+  pilotId: z.string().min(1, 'Pilot ID is required')
 })
 
 export async function POST(request: Request) {
   try {
-    // Get user ID from headers (set by middleware)
-    const userId = request.headers.get('x-user-id')
-    
-    if (!userId) {
+    // Get admin JWT payload from middleware (admin authentication)
+    const adminJwtPayload = request.headers.get('x-admin-jwt-payload')
+    if (!adminJwtPayload) {
       return NextResponse.json(
-        { error: 'User ID not found in request' },
-        { status: 500 }
+        { error: 'Admin authentication required' },
+        { status: 401 }
+      )
+    }
+
+    const payload = JSON.parse(adminJwtPayload)
+    const clubId = payload.adminContext?.clubId
+
+    if (!clubId) {
+      return NextResponse.json(
+        { error: 'Club ID not found in admin session' },
+        { status: 400 }
       )
     }
     
@@ -24,33 +32,10 @@ export async function POST(request: Request) {
     const body = await request.json()
     const validatedData = unassignPilotSchema.parse(body)
 
-    // Check if user is a club admin or system admin
-    const clubAdmin = await prisma.clubPilot.findFirst({
-      where: {
-        pilotId: userId,
-        clubId: validatedData.clubId,
-        role: 'ADMIN'
-      }
-    })
-
-    const systemAdmin = await prisma.pilot.findUnique({
-      where: { 
-        id: userId,
-        is_admin: true
-      }
-    })
-
-    if (!clubAdmin && !systemAdmin) {
-      return NextResponse.json(
-        { error: 'Unauthorized: You must be a club admin or system admin' },
-        { status: 403 }
-      )
-    }
-
     // Check if club exists and is active
     const club = await prisma.club.findUnique({
       where: { 
-        id: validatedData.clubId,
+        id: clubId,
         status: 'active'
       }
     })
@@ -82,7 +67,7 @@ export async function POST(request: Request) {
       where: {
         pilotId_clubId: {
           pilotId: validatedData.pilotId,
-          clubId: validatedData.clubId
+          clubId: clubId
         }
       },
       include: {
@@ -115,7 +100,7 @@ export async function POST(request: Request) {
       where: {
         pilotId_clubId: {
           pilotId: validatedData.pilotId,
-          clubId: validatedData.clubId
+          clubId: clubId
         }
       }
     })

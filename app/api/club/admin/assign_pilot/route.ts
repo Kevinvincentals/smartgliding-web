@@ -1,14 +1,11 @@
 import { NextResponse } from 'next/server'
 import { prisma } from '@/lib/prisma'
 import { z } from 'zod'
-import { ClubRole } from '@prisma/client'
 
-// Validation schema for updating a pilot's role
-const updateRoleSchema = z.object({
+// Validation schema for assigning a pilot
+const assignPilotSchema = z.object({
   pilotId: z.string().min(1, 'Pilot ID is required'),
-  role: z.nativeEnum(ClubRole, {
-    errorMap: () => ({ message: 'Invalid role. Must be either USER or ADMIN' })
-  })
+  role: z.enum(['USER', 'ADMIN']).default('USER')
 })
 
 export async function POST(request: Request) {
@@ -34,7 +31,7 @@ export async function POST(request: Request) {
     
     // Parse and validate request body
     const body = await request.json()
-    const validatedData = updateRoleSchema.parse(body)
+    const validatedData = assignPilotSchema.parse(body)
 
     // Check if club exists and is active
     const club = await prisma.club.findUnique({
@@ -51,23 +48,22 @@ export async function POST(request: Request) {
       )
     }
 
-    // Check if pilot exists and is active
+    // Check if pilot exists
     const pilot = await prisma.pilot.findUnique({
       where: { 
-        id: validatedData.pilotId,
-        status: 'ACTIVE'
+        id: validatedData.pilotId
       }
     })
 
     if (!pilot) {
       return NextResponse.json(
-        { error: 'Pilot not found or not active' },
+        { error: 'Pilot not found' },
         { status: 404 }
       )
     }
 
-    // Check if pilot is assigned to the club
-    const existingClubPilot = await prisma.clubPilot.findUnique({
+    // Check if pilot is already assigned to this club
+    const existingAssignment = await prisma.clubPilot.findUnique({
       where: {
         pilotId_clubId: {
           pilotId: validatedData.pilotId,
@@ -76,22 +72,18 @@ export async function POST(request: Request) {
       }
     })
 
-    if (!existingClubPilot) {
+    if (existingAssignment) {
       return NextResponse.json(
-        { error: 'Pilot is not assigned to this club' },
-        { status: 404 }
+        { error: 'Pilot is already assigned to this club' },
+        { status: 400 }
       )
     }
 
-    // Update the pilot's role
-    const updatedClubPilot = await prisma.clubPilot.update({
-      where: {
-        pilotId_clubId: {
-          pilotId: validatedData.pilotId,
-          clubId: clubId
-        }
-      },
+    // Assign the pilot to the club
+    const clubPilot = await prisma.clubPilot.create({
       data: {
+        pilotId: validatedData.pilotId,
+        clubId: clubId,
         role: validatedData.role
       },
       include: {
@@ -100,7 +92,11 @@ export async function POST(request: Request) {
             id: true,
             firstname: true,
             lastname: true,
-            email: true
+            email: true,
+            phone: true,
+            dsvu_id: true,
+            status: true,
+            membership: true
           }
         },
         club: {
@@ -114,20 +110,20 @@ export async function POST(request: Request) {
 
     return NextResponse.json(
       { 
-        message: 'Role updated successfully',
-        clubPilot: updatedClubPilot
+        message: 'Pilot assigned to club successfully',
+        clubPilot: clubPilot
       },
-      { status: 200 }
+      { status: 201 }
     )
   } catch (error) {
     if (error instanceof z.ZodError) {
       return NextResponse.json(
-        { error: error.errors },
+        { error: error.errors[0].message },
         { status: 400 }
       )
     }
 
-    console.error('Update role error:', error)
+    console.error('Assign pilot error:', error)
     return NextResponse.json(
       { error: 'Internal server error' },
       { status: 500 }

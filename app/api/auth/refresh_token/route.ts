@@ -60,7 +60,7 @@ export async function POST(request: Request) {
       // Generate new tokens
       const tokens = await generateTokens({
         id: pilot.id,
-        email: pilot.email,
+        email: pilot.email || undefined,
         is_admin: pilot.is_admin,
         clubs: clubMemberships
       })

@@ -5,24 +5,41 @@ import { z } from 'zod'
 // Validation schema for creating a plane
 const createPlaneSchema = z.object({
   registration_id: z.string().min(1, 'Registration ID is required'),
-  flarm_id: z.string().optional(),
-  competition_id: z.string().optional(),
+  flarm_id: z.string().nullable().optional(),
+  competition_id: z.string().nullable().optional(),
   type: z.string().min(1, 'Type is required'),
   is_twoseater: z.boolean().default(false),
-  year_produced: z.number().int().optional(),
-  notes: z.string().optional(),
-  clubId: z.string().min(1, 'Club ID is required')
+  is_guest: z.boolean().default(false),
+  year_produced: z.number().int().nullable().optional(),
+  notes: z.string().nullable().optional()
 })
 
 export async function POST(request: Request) {
   try {
-    // Get user ID from headers (set by middleware)
-    const userId = request.headers.get('x-user-id')
-    
+    // Get admin JWT payload from middleware (admin authentication)
+    const adminJwtPayload = request.headers.get('x-admin-jwt-payload')
+    if (!adminJwtPayload) {
+      return NextResponse.json(
+        { error: 'Admin authentication required' },
+        { status: 401 }
+      )
+    }
+
+    const payload = JSON.parse(adminJwtPayload)
+    const clubId = payload.adminContext?.clubId
+    const userId = payload.id // Use 'id' field which contains the pilot ID
+
+    if (!clubId) {
+      return NextResponse.json(
+        { error: 'Club ID not found in admin session' },
+        { status: 400 }
+      )
+    }
+
     if (!userId) {
       return NextResponse.json(
-        { error: 'User ID not found in request' },
-        { status: 500 }
+        { error: 'User ID not found in admin session' },
+        { status: 400 }
       )
     }
     
@@ -33,7 +50,7 @@ export async function POST(request: Request) {
     // Check if club exists and is active
     const club = await prisma.club.findUnique({
       where: { 
-        id: validatedData.clubId,
+        id: clubId,
         status: 'active'
       }
     })
@@ -61,6 +78,7 @@ export async function POST(request: Request) {
     const plane = await prisma.plane.create({
       data: {
         ...validatedData,
+        clubId: clubId,
         createdById: userId
       },
       include: {

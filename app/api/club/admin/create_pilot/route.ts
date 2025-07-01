@@ -1,42 +1,51 @@
 import { NextResponse } from 'next/server'
 import { prisma } from '@/lib/prisma'
 import { z } from 'zod'
-import bcrypt from 'bcryptjs'
-import { ClubRole, PilotMembership, PilotStatus } from '@prisma/client'
 
 // Validation schema for pilot creation
 const createPilotSchema = z.object({
   firstname: z.string().min(1, 'First name is required'),
   lastname: z.string().min(1, 'Last name is required'),
-  email: z.string().email('Invalid email address'),
-  password: z.string().min(8, 'Password must be at least 8 characters'),
-  phone: z.string().optional(),
-  dsvu_id: z.string().optional(),
-  clubId: z.string().min(1, 'Club ID is required'),
-  membership: z.nativeEnum(PilotMembership, {
-    errorMap: () => ({ message: 'Invalid membership type. Must be BASIC, PREMIUM, or VIP' })
-  }).default('BASIC'),
-  status: z.nativeEnum(PilotStatus, {
-    errorMap: () => ({ message: 'Invalid status. Must be ACTIVE, INACTIVE, or PENDING' })
-  }).default('PENDING'),
-  role: z.nativeEnum(ClubRole, {
-    errorMap: () => ({ message: 'Invalid role. Must be USER or ADMIN' })
-  }).default('USER')
+  email: z.string().refine(val => val === '' || val === null || z.string().email().safeParse(val).success, {
+    message: 'Must be a valid email or empty'
+  }).nullable().optional(),
+  phone: z.string().nullable().optional(),
+  dsvu_id: z.string().nullable().optional(),
+  membership: z.enum(['A', 'B', 'C', 'BASIC', 'PREMIUM', 'VIP']).default('A'),
+  status: z.enum(['ACTIVE', 'INACTIVE', 'PENDING']).default('ACTIVE'),
+  role: z.enum(['USER', 'ADMIN']).default('USER'),
+  personal_pin: z.string().length(4).regex(/^\d{4}$/).nullable().optional()
 })
 
 export async function POST(request: Request) {
   try {
-    // Get user ID from headers (set by middleware)
-    const userId = request.headers.get('x-user-id')
+    // Get admin JWT payload from middleware (admin authentication)
+    const adminJwtPayload = request.headers.get('x-admin-jwt-payload')
+    if (!adminJwtPayload) {
+      return NextResponse.json(
+        { error: 'Admin authentication required' },
+        { status: 401 }
+      )
+    }
+
+    const payload = JSON.parse(adminJwtPayload)
+    const clubId = payload.adminContext?.clubId
+
+    if (!clubId) {
+      return NextResponse.json(
+        { error: 'Club ID not found in admin session' },
+        { status: 400 }
+      )
+    }
     
     // Parse and validate request body
     const body = await request.json()
     const validatedData = createPilotSchema.parse(body)
 
-    // Check if club exists
+    // Check if club exists and is active
     const club = await prisma.club.findUnique({
       where: { 
-        id: validatedData.clubId,
+        id: clubId,
         status: 'active'
       }
     })
@@ -48,43 +57,54 @@ export async function POST(request: Request) {
       )
     }
 
-    // Check if email is already taken
-    const existingPilot = await prisma.pilot.findUnique({
-      where: { email: validatedData.email }
-    })
+    // Check if email is already taken (only if email is provided)
+    if (validatedData.email) {
+      const existingPilot = await prisma.pilot.findFirst({
+        where: { email: validatedData.email }
+      })
 
-    if (existingPilot) {
-      return NextResponse.json(
-        { error: 'Email already registered' },
-        { status: 400 }
-      )
+      if (existingPilot) {
+        return NextResponse.json(
+          { error: 'Email already registered' },
+          { status: 400 }
+        )
+      }
     }
-
-    // Hash the password
-    const hashedPassword = await bcrypt.hash(validatedData.password, 10)
 
     // Create the pilot and assign to club in a transaction
     const result = await prisma.$transaction(async (tx) => {
+      // Prepare pilot data (only include fields that have values)
+      const pilotData: any = {
+        firstname: validatedData.firstname,
+        lastname: validatedData.lastname,
+        status: validatedData.status,
+        membership: validatedData.membership,
+        is_admin: false
+      }
+
+      // Handle email - if no email provided, generate a unique placeholder to avoid constraint issues
+      if (validatedData.email && validatedData.email.trim() !== '') {
+        pilotData.email = validatedData.email
+      } else {
+        // Generate a unique placeholder email to work around MongoDB unique constraint
+        pilotData.email = `noemail_${Date.now()}_${Math.random().toString(36).substr(2, 9)}@placeholder.local`
+      }
+
+      // Only include optional fields if they have values
+      if (validatedData.phone) pilotData.phone = validatedData.phone
+      if (validatedData.dsvu_id) pilotData.dsvu_id = validatedData.dsvu_id
+      if (validatedData.personal_pin) pilotData.personal_pin = validatedData.personal_pin
+
       // Create the pilot
       const pilot = await tx.pilot.create({
-        data: {
-          firstname: validatedData.firstname,
-          lastname: validatedData.lastname,
-          email: validatedData.email,
-          password: hashedPassword,
-          phone: validatedData.phone,
-          dsvu_id: validatedData.dsvu_id,
-          status: validatedData.status,
-          membership: validatedData.membership,
-          is_admin: false
-        }
+        data: pilotData
       })
 
       // Assign the pilot to the club
       const clubPilot = await tx.clubPilot.create({
         data: {
           pilotId: pilot.id,
-          clubId: validatedData.clubId,
+          clubId: clubId,
           role: validatedData.role
         },
         include: {
@@ -122,7 +142,7 @@ export async function POST(request: Request) {
   } catch (error) {
     if (error instanceof z.ZodError) {
       return NextResponse.json(
-        { error: error.errors },
+        { error: error.errors[0].message },
         { status: 400 }
       )
     }

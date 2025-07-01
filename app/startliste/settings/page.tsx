@@ -2,7 +2,7 @@
 
 import { Suspense, useState, useEffect } from "react"
 import { useRouter } from "next/navigation"
-import { Loader2, WifiOff, User, SettingsIcon, FileText, LogOut, History } from "lucide-react"
+import { Loader2, WifiOff, User, SettingsIcon, FileText, LogOut, History, Shield } from "lucide-react"
 import { AlertDialog, AlertDialogContent, AlertDialogHeader, AlertDialogTitle, AlertDialogDescription } from "@/components/ui/alert-dialog"
 import { Button } from "@/components/ui/button"
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
@@ -452,7 +452,16 @@ function Settings({ dailyInfo }: SettingsProps = {}) {
                 isLoading={initialLoading}
               />
 
-              <div className="pt-4 border-t">
+              <div className="pt-4 border-t space-y-3">
+                <Button 
+                  variant="outline" 
+                  onClick={() => router.push('/club/admin/auth')}
+                  className="w-full sm:w-auto"
+                >
+                  <Shield className="mr-2 h-4 w-4" />
+                  Club Admin
+                </Button>
+                
                 <Button 
                   variant="destructive" 
                   onClick={handleSignOut} 

@@ -9,12 +9,24 @@ const clubIdSchema = z.object({
 
 export async function GET(request: Request) {
   try {
-    // Get user ID from headers (set by middleware)
-    const userId = request.headers.get('x-user-id')
-    
-    // Get club ID from URL search params
-    const { searchParams } = new URL(request.url)
-    const clubId = searchParams.get('clubId')
+    // Get admin JWT payload from middleware (admin authentication)
+    const adminJwtPayload = request.headers.get('x-admin-jwt-payload')
+    if (!adminJwtPayload) {
+      return NextResponse.json(
+        { error: 'Admin authentication required' },
+        { status: 401 }
+      )
+    }
+
+    const payload = JSON.parse(adminJwtPayload)
+    const clubId = payload.adminContext?.clubId
+
+    if (!clubId) {
+      return NextResponse.json(
+        { error: 'Club ID not found in admin session' },
+        { status: 400 }
+      )
+    }
 
     // Validate club ID
     const validatedData = clubIdSchema.parse({ clubId })
@@ -55,7 +67,7 @@ export async function GET(request: Request) {
       },
       orderBy: {
         pilot: {
-          lastname: 'asc'
+          firstname: 'asc'
         }
       }
     })

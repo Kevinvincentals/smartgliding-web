@@ -7,15 +7,24 @@ const planeIdSchema = z.object({
   planeId: z.string().min(1, 'Plane ID is required')
 })
 
-export async function DELETE(request: Request) {
+export async function POST(request: Request) {
   try {
-    // Get user ID from headers (set by middleware)
-    const userId = request.headers.get('x-user-id')
-    
-    if (!userId) {
+    // Get admin JWT payload from middleware (admin authentication)
+    const adminJwtPayload = request.headers.get('x-admin-jwt-payload')
+    if (!adminJwtPayload) {
       return NextResponse.json(
-        { error: 'User ID not found in request' },
-        { status: 500 }
+        { error: 'Admin authentication required' },
+        { status: 401 }
+      )
+    }
+
+    const payload = JSON.parse(adminJwtPayload)
+    const clubId = payload.adminContext?.clubId
+
+    if (!clubId) {
+      return NextResponse.json(
+        { error: 'Club ID not found in admin session' },
+        { status: 400 }
       )
     }
     
@@ -23,7 +32,7 @@ export async function DELETE(request: Request) {
     const body = await request.json()
     const validatedData = planeIdSchema.parse(body)
 
-    // Get the plane
+    // Get the plane and verify it belongs to this club
     const plane = await prisma.plane.findUnique({
       where: { id: validatedData.planeId }
     })
@@ -35,25 +44,9 @@ export async function DELETE(request: Request) {
       )
     }
 
-    // Check if user is a club admin or system admin
-    const clubAdmin = await prisma.clubPilot.findFirst({
-      where: {
-        pilotId: userId,
-        clubId: plane.clubId,
-        role: 'ADMIN'
-      }
-    })
-
-    const systemAdmin = await prisma.pilot.findUnique({
-      where: { 
-        id: userId,
-        is_admin: true
-      }
-    })
-
-    if (!clubAdmin && !systemAdmin) {
+    if (plane.clubId !== clubId) {
       return NextResponse.json(
-        { error: 'Unauthorized: You must be a club admin or system admin' },
+        { error: 'Plane does not belong to this club' },
         { status: 403 }
       )
     }
