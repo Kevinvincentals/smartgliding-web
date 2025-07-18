@@ -21,9 +21,8 @@ COPY --from=deps /app/node_modules ./node_modules
 COPY . .
 
 # Generate Prisma client and build the application
-ENV PRISMA_ENGINES_CHECKSUM_IGNORE_MISSING=1
 RUN --mount=type=cache,target=/app/.next/cache \
-    npm run build
+    PRISMA_ENGINES_CHECKSUM_IGNORE_MISSING=1 npm run build
 
 # Production image, copy all the files and run next
 FROM base AS runner
