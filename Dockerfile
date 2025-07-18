@@ -20,9 +20,12 @@ WORKDIR /app
 COPY --from=deps /app/node_modules ./node_modules
 COPY . .
 
-# Generate Prisma client and build the application
+# Generate Prisma client
+RUN npx prisma generate
+
+# Build the application with build cache mount
 RUN --mount=type=cache,target=/app/.next/cache \
-    PRISMA_ENGINES_CHECKSUM_IGNORE_MISSING=1 npm run build
+    npm run build
 
 # Production image, copy all the files and run next
 FROM base AS runner
