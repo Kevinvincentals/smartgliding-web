@@ -19,12 +19,13 @@ import React from "react"
 
 interface SettingsProps {
   dailyInfo?: any;
+  currentAirfield?: string | null;
 }
 
 const ACCESS_TOKEN_KEY = process.env.NEXT_PUBLIC_TABLET_ACCESS_TOKEN_KEY || 'tabletAccessToken'
 const REFRESH_TOKEN_KEY = process.env.NEXT_PUBLIC_TABLET_REFRESH_TOKEN_KEY || 'tabletRefreshToken'
 
-function Settings({ dailyInfo }: SettingsProps = {}) {
+function Settings({ dailyInfo, currentAirfield }: SettingsProps = {}) {
   const router = useRouter()
   const [activeTab, setActiveTab] = useState("general")
   const [trafficLeaderId, setTrafficLeaderId] = useState("")
@@ -43,6 +44,11 @@ function Settings({ dailyInfo }: SettingsProps = {}) {
   const [trafficLeaderName, setTrafficLeaderName] = useState("")
   const [towPersonName, setTowPersonName] = useState("")
   const { toast } = useToast()
+  
+  // Check if club is operating from a different airfield than their home field
+  const isOperatingFromDifferentAirfield = currentAirfield && dailyInfo?.club?.homefield && 
+                                         currentAirfield !== dailyInfo.club.homefield;
+  const rolesRequired = !isOperatingFromDifferentAirfield;
   
   // Fetch pilots from API once
   const fetchPilots = async () => {
@@ -416,6 +422,26 @@ function Settings({ dailyInfo }: SettingsProps = {}) {
               <CardDescription>Konfigurer dine præferencer for dashboardet</CardDescription>
             </CardHeader>
             <CardContent className="space-y-8">
+              {/* Role requirement status */}
+              {isOperatingFromDifferentAirfield && (
+                <div className="rounded-lg border bg-blue-50 p-4">
+                  <div className="flex items-start gap-2">
+                    <div className="rounded-full bg-blue-100 p-1">
+                      <User className="h-4 w-4 text-blue-600" />
+                    </div>
+                    <div className="flex-1">
+                      <h4 className="text-sm font-medium text-blue-900">
+                        Bemanding er valgfri
+                      </h4>
+                      <p className="text-sm text-blue-700 mt-1">
+                        Da du opererer fra {currentAirfield} (ikke jeres hjemmeflyveplads {dailyInfo?.club?.homefield}), 
+                        er trafikleder og spilfører valgfrie roller.
+                      </p>
+                    </div>
+                  </div>
+                </div>
+              )}
+
               <TrafficLeaderSetting
                 pilots={pilotOptions}
                 trafficLeaderId={trafficLeaderId}
@@ -528,10 +554,16 @@ function SettingsPageContent() {
     // Data state
     dailyInfo,
     tcasAlert,
+    currentAirfield,
 
     // Functions
     goToSettings,
   } = useStartliste()
+
+  // Check if club is operating from a different airfield than their home field
+  const isOperatingFromDifferentAirfield = currentAirfield && dailyInfo?.club?.homefield && 
+                                         currentAirfield !== dailyInfo.club.homefield;
+  const rolesRequired = !isOperatingFromDifferentAirfield;
 
   return (
     <div className="flex min-h-screen w-full flex-col bg-background overflow-hidden">
@@ -575,7 +607,11 @@ function SettingsPageContent() {
                 Vælg dagens bemanding
               </AlertDialogTitle>
               <AlertDialogDescription className="text-base">
-                For at kunne registrere flyvninger korrekt, skal du angive dagens trafikleder og spilfører.
+                {rolesRequired ? (
+                  "For at kunne registrere flyvninger korrekt, skal du angive dagens trafikleder og spilfører."
+                ) : (
+                  `Da du opererer fra ${currentAirfield} (ikke jeres hjemmeflyveplads), er bemanding valgfri, men kan stadig indstilles.`
+                )}
               </AlertDialogDescription>
             </AlertDialogHeader>
             
@@ -608,7 +644,7 @@ function SettingsPageContent() {
         
         {/* Main content */}
         <div className="flex-1 p-2 pt-4 sm:p-3 m-0 overflow-auto">
-          <Settings dailyInfo={dailyInfo} />
+          <Settings dailyInfo={dailyInfo} currentAirfield={currentAirfield} />
         </div>
       </main>
     </div>

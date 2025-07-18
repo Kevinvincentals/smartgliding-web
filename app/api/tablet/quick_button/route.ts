@@ -45,6 +45,11 @@ export async function POST(request: NextRequest): Promise<NextResponse<QuickButt
 
     const { flightId, action } = validation.data;
 
+    // Get JWT payload from headers (set by middleware)
+    const jwtPayloadString = request.headers.get('x-jwt-payload');
+    const jwtPayload = jwtPayloadString ? JSON.parse(jwtPayloadString) : null;
+    const clubId = jwtPayload?.clubId || jwtPayload?.id;
+
     console.log(`Quick button action: ${action} for flight ID: ${flightId}`);
 
     // Check if the flight exists in the database
@@ -129,6 +134,13 @@ export async function POST(request: NextRequest): Promise<NextResponse<QuickButt
             type: true,
             is_twoseater: true,
             flarm_id: true
+          }
+        },
+        club: {
+          select: {
+            id: true,
+            name: true,
+            homefield: true
           }
         }
       }
@@ -269,7 +281,9 @@ export async function POST(request: NextRequest): Promise<NextResponse<QuickButt
     // Create a data object with explicit status for the client
     const flightWithStatus = {
       ...updatedFlight,
-      status // Include the client-friendly status
+      status, // Include the client-friendly status
+      club: updatedFlight.club,
+      isOwnFlight: updatedFlight.clubId === clubId
     };
     
     // Determine the target airfield for the broadcast

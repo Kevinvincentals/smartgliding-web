@@ -42,10 +42,12 @@ export interface Pilot {
  * Airfield/airport information
  */
 export interface AirfieldOption {
-  /** Unique airfield identifier */
+  /** Unique airfield identifier (ICAO code) */
   id: string
-  /** Human-readable airfield name */
+  /** Human-readable airfield name (includes code and name) */
   name: string
+  /** Airfield type (optional) */
+  type?: string
   /** ICAO code (optional) */
   icaoCode?: string
   /** Coordinates (optional) */
@@ -115,6 +117,14 @@ export interface Flight {
   isPrivatePlane?: boolean
   /** MongoDB ObjectId for the plane */
   planeId?: string | null
+  /** Whether this flight belongs to the current club (can edit/delete) */
+  isOwnFlight?: boolean
+  /** Club information for the flight */
+  club?: {
+    id: string
+    name: string
+    homefield: string | null
+  } | null
 }
 
 /**

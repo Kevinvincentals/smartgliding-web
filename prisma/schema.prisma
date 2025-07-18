@@ -48,7 +48,8 @@ model Club {
   contactPhone String?
   club_pin     Int             @default(0)
   instructor_pin Int           @default(0)
-  homefield    String?
+  homefield    String?         // Primary airfield for backward compatibility
+  allowed_airfields String[]   @default([])  // Array of airfield codes this club can operate at
   status       String          @default("active")
   pilots       ClubPilot[]
   planes       Plane[]
@@ -161,6 +162,7 @@ model FlightLogbook {
   max_speed          Float? // in km/h
   takeoff_airfield   String?
   landing_airfield   String?
+  operating_airfield String?      // The main airfield for this flight session
   notes              String? // Flight notes
   status             FlightStatus @default(PENDING)
   deleted            Boolean      @default(false)

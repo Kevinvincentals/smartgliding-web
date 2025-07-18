@@ -26,7 +26,7 @@ export async function POST(request: NextRequest): Promise<NextResponse<AuthRespo
       )
     }
 
-    const { clubId, pin } = validation.data
+    const { clubId, pin, selectedAirfield } = validation.data
 
     // Find club in database
     const club = await prisma.club.findUnique({
@@ -34,6 +34,7 @@ export async function POST(request: NextRequest): Promise<NextResponse<AuthRespo
       select: {
         id: true,
         homefield: true,
+        allowed_airfields: true,
         club_pin: true,
         name: true,
       },
@@ -56,11 +57,19 @@ export async function POST(request: NextRequest): Promise<NextResponse<AuthRespo
       )
     }
 
+    // Note: We now allow any airfield to be selected during login
+    // The airfield selection is no longer restricted to club's allowed_airfields
+
     // Generate JWT tokens
     const jwtPayload: JWTPayload = {
       id: club.id,
       clubId: club.id,
       homefield: club.homefield,
+      selectedAirfield: selectedAirfield || club.homefield || undefined,
+      allowedAirfields: [
+        ...(club.allowed_airfields || []),
+        ...(club.homefield ? [club.homefield] : [])
+      ],
     }
 
     const { 
@@ -115,7 +124,8 @@ export async function POST(request: NextRequest): Promise<NextResponse<AuthRespo
     const responseData: AuthResponse = { 
       success: true, 
       clubId: club.id, 
-      homefield: club.homefield || undefined
+      homefield: club.homefield || undefined,
+      selectedAirfield: selectedAirfield || club.homefield || undefined
     }
     
     const response = NextResponse.json<AuthResponse>(responseData)

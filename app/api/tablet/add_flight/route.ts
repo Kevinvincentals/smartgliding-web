@@ -97,6 +97,9 @@ export async function POST(request: NextRequest): Promise<NextResponse> {
       }
     }
 
+    // Get selected airfield from JWT payload
+    const selectedAirfield = jwtPayload.selectedAirfield || jwtPayload.homefield || startField;
+
     // Create flight data object with proper typing
     const flightData = {
       flarm_id: planeFlarmId || (aircraft.hasFlarm ? (aircraft.flarmId || 'unknown') : 'none'),
@@ -108,6 +111,7 @@ export async function POST(request: NextRequest): Promise<NextResponse> {
       planeId: planeId,
       clubId: clubId,
       takeoff_airfield: startField,
+      operating_airfield: selectedAirfield,
       pilot1Id: null as string | null,
       pilot2Id: null as string | null,
       guest_pilot1_name: null as string | null,
@@ -164,6 +168,7 @@ export async function POST(request: NextRequest): Promise<NextResponse> {
         planeId: true,
         clubId: true,
         takeoff_airfield: true,
+        operating_airfield: true,
         status: true,
         deleted: true,
         createdAt: true,
@@ -189,6 +194,13 @@ export async function POST(request: NextRequest): Promise<NextResponse> {
             type: true,
             is_twoseater: true,
             flarm_id: true
+          }
+        },
+        club: {
+          select: {
+            id: true,
+            name: true,
+            homefield: true
           }
         }
       }
@@ -227,12 +239,14 @@ export async function POST(request: NextRequest): Promise<NextResponse> {
         is_twoseater: true,
         flarm_id: newFlight.flarm_id,
         has_valid_flarm: Boolean(newFlight.flarm_id && newFlight.flarm_id !== 'none' && newFlight.flarm_id !== 'unknown')
-      }
+      },
+      club: newFlight.club,
+      isOwnFlight: newFlight.clubId === clubId
     }
 
 
     // Determine target airfield for WebSocket broadcast
-    const targetAirfield = newFlight.takeoff_airfield || "unknown"
+    const targetAirfield = newFlight.operating_airfield || newFlight.takeoff_airfield || selectedAirfield || "unknown"
     if (targetAirfield === "unknown") {
       console.warn(`AddFlight: Could not determine target airfield for new flight. Broadcasting might be too broad or fail to infer.`)
     }

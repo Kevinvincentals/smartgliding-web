@@ -520,8 +520,23 @@ function StartList({ socket, wsConnected, dailyInfo, authenticatedChannel, airfi
         deleted: isDeleted,
         createdAt: wsFlightData.createdAt, // Add the missing createdAt field
         isPrivatePlane: wsFlightData.isPrivatePlane || false, // Pass through the private plane status
-        planeId: wsFlightData.planeId || null // Pass through the MongoDB ObjectId for the plane
+        planeId: wsFlightData.planeId || null, // Pass through the MongoDB ObjectId for the plane
+        isOwnFlight: dailyInfo?.clubId ? wsFlightData.clubId === dailyInfo.clubId : true, // Calculate based on current user's club, default to true if clubId not available
+        club: wsFlightData.club // Pass through the club information
       };
+      
+      // Debug logging for WebSocket flight updates
+      console.log('WebSocket Flight Update Debug:', {
+        originalId: wsFlightData.id,
+        registration: aircraft.registration,
+        wsIsOwnFlight: wsFlightData.isOwnFlight,
+        flightClubId: wsFlightData.clubId,
+        currentClubId: dailyInfo?.clubId,
+        calculatedIsOwnFlight: updatedFlight.isOwnFlight,
+        wsClub: wsFlightData.club?.name,
+        transformedClub: updatedFlight.club?.name,
+        event: data.event
+      });
       
       // Update or add the flight in the existing flights array
       // DON'T sort here - let the useMemo handle all sorting consistently
@@ -828,7 +843,7 @@ function StartList({ socket, wsConnected, dailyInfo, authenticatedChannel, airfi
         else if (apiFlight.takeoff_time && apiFlight.landing_time) status = 'completed';
         else if (apiFlight.status === 'pending' || apiFlight.status === 'PENDING' || !apiFlight.status) status = 'pending';
         
-        return {
+        const transformedFlight = {
           id: parseInt(apiFlight.id.substring(0, 8), 16),
           originalId: apiFlight.id,
           aircraft,
@@ -846,8 +861,12 @@ function StartList({ socket, wsConnected, dailyInfo, authenticatedChannel, airfi
           deleted: isDeleted,
           createdAt: apiFlight.createdAt, // Add createdAt field for consistent sorting
           isPrivatePlane: apiFlight.isPrivatePlane || false, // Pass through the private plane status
-          planeId: apiFlight.planeId || null // Pass through the MongoDB ObjectId for the plane
-        }
+          planeId: apiFlight.planeId || null, // Pass through the MongoDB ObjectId for the plane
+          isOwnFlight: apiFlight.isOwnFlight, // Pass through the club ownership status
+          club: apiFlight.club // Pass through the club information
+        };
+        
+        return transformedFlight;
       })
       
       setFlights(transformedFlights)
@@ -1513,6 +1532,8 @@ function StartList({ socket, wsConnected, dailyInfo, authenticatedChannel, airfi
                     compact={compactMode}
                     flarmStatus={flarmStatus}
                     isDuplicating={isDuplicating}
+                    currentClubHomefield={dailyInfo?.club?.homefield}
+                    currentAirfield={authenticatedChannel || undefined}
                   />
                 );
               })}
@@ -1539,6 +1560,8 @@ function StartList({ socket, wsConnected, dailyInfo, authenticatedChannel, airfi
           flarmStatus={editFlight?.aircraft?.hasFlarm && editFlight?.aircraft?.flarmId 
             ? flarmStatuses[editFlight.aircraft.flarmId] || 'unknown'
             : null}
+          currentClubHomefield={dailyInfo?.club?.homefield}
+          currentAirfield={authenticatedChannel || undefined}
         />
 
         {/* Time Picker Dialog */}

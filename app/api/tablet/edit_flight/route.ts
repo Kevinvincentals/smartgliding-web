@@ -33,6 +33,25 @@ export async function POST(request: NextRequest): Promise<NextResponse<UpdateFli
 
     const data = validation.data;
     
+    // Get JWT payload from headers (set by middleware)
+    const jwtPayloadString = request.headers.get('x-jwt-payload');
+    if (!jwtPayloadString) {
+      return NextResponse.json<UpdateFlightResponse>(
+        { success: false, error: 'Authentication token not found in request headers.' },
+        { status: 401 }
+      );
+    }
+
+    const jwtPayload = JSON.parse(jwtPayloadString);
+    const clubId = jwtPayload.clubId || jwtPayload.id;
+
+    if (!clubId) {
+      return NextResponse.json<UpdateFlightResponse>(
+        { success: false, error: 'Club ID not found in authentication token.' },
+        { status: 401 }
+      );
+    }
+    
     // Destructure validated properties
     const {
       id,
@@ -286,6 +305,13 @@ export async function POST(request: NextRequest): Promise<NextResponse<UpdateFli
             is_twoseater: true,
             flarm_id: true
           }
+        },
+        club: {
+          select: {
+            id: true,
+            name: true,
+            homefield: true
+          }
         }
       }
     });
@@ -409,7 +435,9 @@ export async function POST(request: NextRequest): Promise<NextResponse<UpdateFli
           }
         : (updatedFlight.guest_pilot2_name 
             ? { id: 'guest', name: updatedFlight.guest_pilot2_name }
-            : null)
+            : null),
+      club: updatedFlight.club,
+      isOwnFlight: updatedFlight.clubId === clubId
     };
 
     // Determine the target airfield for the broadcast

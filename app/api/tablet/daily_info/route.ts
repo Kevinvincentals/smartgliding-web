@@ -51,6 +51,11 @@ interface DailyInfoApiResponse extends ApiResponse {
       firstname: string
       lastname: string
     } | null
+    club?: {
+      id: string
+      name: string
+      homefield: string | null
+    } | null
   }
 }
 
@@ -96,6 +101,13 @@ async function getOrCreateDailyInfo(clubId: string, date = new Date()) {
           id: true,
           firstname: true,
           lastname: true
+        }
+      },
+      club: {
+        select: {
+          id: true,
+          name: true,
+          homefield: true
         }
       }
     }
@@ -148,6 +160,13 @@ async function getOrCreateDailyInfo(clubId: string, date = new Date()) {
             id: true,
             firstname: true,
             lastname: true,
+          }
+        },
+        club: {
+          select: {
+            id: true,
+            name: true,
+            homefield: true
           }
         }
       }
@@ -360,6 +379,13 @@ export async function POST(request: NextRequest): Promise<NextResponse<DailyInfo
             id: true,
             firstname: true,
             lastname: true,
+          }
+        },
+        club: {
+          select: {
+            id: true,
+            name: true,
+            homefield: true
           }
         }
       }

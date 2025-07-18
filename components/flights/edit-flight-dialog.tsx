@@ -32,6 +32,8 @@ interface EditFlightDialogProps {
   flarmStatus: FlarmStatus | null
   isHistorical?: boolean
   historicalDate?: Date
+  currentClubHomefield?: string | null
+  currentAirfield?: string | null
 }
 
 export function EditFlightDialog({
@@ -46,6 +48,8 @@ export function EditFlightDialog({
   flarmStatus,
   isHistorical = false,
   historicalDate,
+  currentClubHomefield,
+  currentAirfield,
 }: EditFlightDialogProps) {
   const [apiPilots, setApiPilots] = useState<Pilot[]>([])
   const [isLoadingPilots, setIsLoadingPilots] = useState(false)
@@ -54,6 +58,11 @@ export function EditFlightDialog({
   const [isDeleting, setIsDeleting] = useState(false)
   const [showDeleteConfirm, setShowDeleteConfirm] = useState(false)
   const [airfieldOptions, setAirfieldOptions] = useState(initialAirfieldOptions)
+  
+  // Check if this flight can be edited
+  // Home club of an airfield can always edit flights at their airfield
+  const isHomeClubOfAirfield = currentClubHomefield === currentAirfield;
+  const canEdit = isHomeClubOfAirfield || flight?.isOwnFlight !== false;
   
   // State to track selected pilots and fields
   const [selectedPilot, setSelectedPilot] = useState<Pilot | null>(null)
@@ -750,6 +759,19 @@ export function EditFlightDialog({
             </DrawerHeader>
             <div className="overflow-y-auto px-4 pb-4">
               <div className="grid gap-4">
+                {/* Display readonly warning for external flights */}
+                {!canEdit && (
+                  <div className="text-sm text-amber-700 p-2 bg-amber-50 rounded border border-amber-200">
+                    <div className="flex items-center gap-2">
+                      <AlertCircle className="h-4 w-4" />
+                      <span className="font-medium">Kun visning:</span>
+                    </div>
+                    <div className="mt-1">
+                      Denne flyvning er oprettet af en anden klub og kan ikke redigeres.
+                    </div>
+                  </div>
+                )}
+                
                 {/* Display error message */}
                 {error && (
                   <div className="text-sm text-red-500 p-2 bg-red-50 rounded border border-red-200">
@@ -1039,7 +1061,7 @@ export function EditFlightDialog({
                   variant="destructive" 
                   className="h-12" 
                   onClick={handleDeleteClick}
-                  disabled={isDeleting}
+                  disabled={isDeleting || !canEdit}
                 >
                   <Trash className="mr-1 h-4 w-4" />
                   Slet
@@ -1047,9 +1069,9 @@ export function EditFlightDialog({
                 <Button 
                   className="h-12" 
                   onClick={handleSaveButtonClick}
-                  disabled={isSaving}
+                  disabled={isSaving || !canEdit}
                 >
-                  {isSaving ? "Gemmer..." : "Gem"}
+                  {isSaving ? "Gemmer..." : canEdit ? "Gem" : "Kan ikke redigere"}
                 </Button>
               </div>
             </DrawerFooter>
@@ -1096,6 +1118,19 @@ export function EditFlightDialog({
                 </div>
               </div>
 
+              {/* Display readonly warning for external flights */}
+              {!canEdit && (
+                <div className="text-sm text-amber-700 p-2 bg-amber-50 rounded border border-amber-200">
+                  <div className="flex items-center gap-2">
+                    <AlertCircle className="h-4 w-4" />
+                    <span className="font-medium">Kun visning:</span>
+                  </div>
+                  <div className="mt-1">
+                    Denne flyvning er oprettet af en anden klub og kan ikke redigeres.
+                  </div>
+                </div>
+              )}
+              
               {/* Display error message */}
               {error && (
                 <div className="text-sm text-red-500 p-2 bg-red-50 rounded border border-red-200">
@@ -1378,7 +1413,7 @@ export function EditFlightDialog({
                   size="lg" 
                   className="h-14 px-4 text-lg font-medium flex-1" 
                   onClick={handleDeleteClick}
-                  disabled={isDeleting}
+                  disabled={isDeleting || !canEdit}
                 >
                   <Trash className="mr-2 h-5 w-5" />
                   Slet
@@ -1387,9 +1422,9 @@ export function EditFlightDialog({
                   size="lg" 
                   className="h-14 px-4 text-lg font-medium flex-1" 
                   onClick={handleSaveButtonClick}
-                  disabled={isSaving}
+                  disabled={isSaving || !canEdit}
                 >
-                  {isSaving ? "Gemmer..." : "Gem"}
+                  {isSaving ? "Gemmer..." : canEdit ? "Gem" : "Kan ikke redigere"}
                 </Button>
               </div>
             </DialogFooter>

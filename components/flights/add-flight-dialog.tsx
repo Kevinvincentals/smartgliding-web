@@ -83,12 +83,22 @@ export function AddFlightDialog({
   useEffect(() => {
     if (open) {
       fetchPlanesAndPilots();
+      // Ensure startField is set if airfieldOptions are available
+      if (airfieldOptions && airfieldOptions.length > 0 && (!newFlight.startField || newFlight.startField === "")) {
+        console.log('Dialog opened, setting startField to:', airfieldOptions[0].id);
+        setNewFlight(prev => ({
+          ...prev,
+          startField: airfieldOptions[0].id
+        }));
+      }
     }
-  }, [open]);
+  }, [open, airfieldOptions]);
 
   // Add useEffect to update startField when airfieldOptions changes
   useEffect(() => {
-    if (airfieldOptions && airfieldOptions.length > 0) {
+    if (airfieldOptions && airfieldOptions.length > 0 && (!newFlight.startField || newFlight.startField === "")) {
+      console.log('Setting startField to:', airfieldOptions[0].id);
+      console.log('Current newFlight.startField:', newFlight.startField);
       setNewFlight(prev => ({
         ...prev,
         startField: airfieldOptions[0].id
@@ -613,6 +623,14 @@ export function AddFlightDialog({
       return;
     }
 
+    if (!newFlight.startField) {
+      console.log('startField is empty:', newFlight.startField);
+      console.log('newFlight object:', newFlight);
+      setError('Please select a start field');
+      setIsLoading(false);
+      return;
+    }
+
     try {
       // No need to provide clubId, API will use default from .env
       const response = await fetch('/api/tablet/add_flight', {
@@ -882,7 +900,10 @@ export function AddFlightDialog({
                     </Label>
                     <Select
                       value={newFlight.startField}
-                      onValueChange={(value) => setNewFlight({ ...newFlight, startField: value })}
+                      onValueChange={(value) => {
+                        console.log('Select onValueChange called with value:', value);
+                        setNewFlight({ ...newFlight, startField: value });
+                      }}
                     >
                       <SelectTrigger className="h-16 text-base">
                         <SelectValue placeholder="Vælg startplads" />

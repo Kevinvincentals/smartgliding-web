@@ -32,6 +32,8 @@ export interface JWTPayload extends JoseJWTPayload {
   // Fields primarily for tablet JWTs (make optional if not in user JWTs)
   clubId?: string; // Can be redundant if `id` is always clubId for tablets
   homefield?: string | null;
+  selectedAirfield?: string; // The airfield selected during login
+  allowedAirfields?: string[]; // Array of airfields this club can operate at
   
   // Admin context for club admin sessions
   adminContext?: AdminContext;

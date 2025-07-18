@@ -31,6 +31,8 @@ interface StartlisteContextType {
   setTcasAlert: (alert: any) => void
   airfieldOptions: any[]
   setAirfieldOptions: (options: any[]) => void
+  currentAirfield: string | null
+  setCurrentAirfield: (airfield: string | null) => void
 
   // Functions
   navigateToPage: (page: string) => void
@@ -79,6 +81,7 @@ export function StartlisteProvider({ children }: StartlisteProviderProps) {
   const [dailyInfo, setDailyInfo] = useState<any>(null)
   const [tcasAlert, setTcasAlert] = useState<any>(null)
   const [airfieldOptions, setAirfieldOptions] = useState<any[]>([])
+  const [currentAirfield, setCurrentAirfield] = useState<string | null>(null)
 
   // Refs
   const disconnectionTimeoutRef = useRef<NodeJS.Timeout | null>(null)
@@ -174,15 +177,26 @@ export function StartlisteProvider({ children }: StartlisteProviderProps) {
             const hasTrafficLeader = !!dailyData.dailyInfo.trafficLeaderId;
             const hasTowPerson = !!dailyData.dailyInfo.towPersonId;
             
-            if (!hasTrafficLeader || !hasTowPerson) {
+            // Check if club is operating from a different airfield than their home field
+            const isOperatingFromDifferentAirfield = currentAirfield && dailyData.dailyInfo.club?.homefield && 
+                                                   currentAirfield !== dailyData.dailyInfo.club.homefield;
+            
+            // Only require roles if operating from home airfield
+            const rolesRequired = !isOperatingFromDifferentAirfield;
+            
+            if (rolesRequired && (!hasTrafficLeader || !hasTowPerson)) {
               if (currentPage !== "settings" && currentPage !== "statistics") {
                 setShowRolesDialog(true);
               }
             }
           } else {
-            // No daily info exists yet - show roles dialog to encourage setup
+            // No daily info exists yet - only show roles dialog if operating from home airfield
+            const isOperatingFromDifferentAirfield = currentAirfield && dailyInfo?.club?.homefield && 
+                                                   currentAirfield !== dailyInfo?.club.homefield;
+            const rolesRequired = !isOperatingFromDifferentAirfield;
+            
             setDailyInfo(null);
-            if (currentPage !== "settings" && currentPage !== "statistics") {
+            if (rolesRequired && currentPage !== "settings" && currentPage !== "statistics") {
               setShowRolesDialog(true);
             }
           }
@@ -195,9 +209,9 @@ export function StartlisteProvider({ children }: StartlisteProviderProps) {
     };
     
     fetchData();
-  }, [currentPage, toast, router]);
+  }, [currentPage, currentAirfield, toast, router]);
 
-  // Fetch airfield options
+  // Fetch airfield options and current airfield
   useEffect(() => {
     const fetchAirfieldOptions = async () => {
       try {
@@ -212,8 +226,23 @@ export function StartlisteProvider({ children }: StartlisteProviderProps) {
         console.error('Error fetching airfield options:', error);
       }
     };
+
+    const fetchCurrentAirfield = async () => {
+      try {
+        const response = await fetch('/api/tablet/me');
+        if (response.ok) {
+          const data = await response.json();
+          if (data.success && data.selectedAirfield) {
+            setCurrentAirfield(data.selectedAirfield);
+          }
+        }
+      } catch (error) {
+        console.error('Error fetching current airfield:', error);
+      }
+    };
     
     fetchAirfieldOptions();
+    fetchCurrentAirfield();
   }, []);
 
   // WebSocket message handler
@@ -643,6 +672,8 @@ export function StartlisteProvider({ children }: StartlisteProviderProps) {
     setTcasAlert,
     airfieldOptions,
     setAirfieldOptions,
+    currentAirfield,
+    setCurrentAirfield,
 
     // Functions
     navigateToPage,

@@ -41,20 +41,20 @@ export async function GET(request: NextRequest): Promise<NextResponse<ClubFields
     }
 
     const jwtPayload: JWTPayload = JSON.parse(jwtPayloadString);
-    const homefield = jwtPayload.homefield || jwtPayload.club?.homefield;
+    const selectedAirfield = jwtPayload.selectedAirfield || jwtPayload.homefield || jwtPayload.club?.homefield;
 
-    if (!homefield) {
+    if (!selectedAirfield) {
       return NextResponse.json<ClubFieldsApiResponse>(
-        { success: false, error: 'Homefield not found in authentication token.' }, 
+        { success: false, error: 'Selected airfield not found in authentication token.' }, 
         { status: 401 }
       );
     }
 
-    console.log(`Fetching club fields for homefield: ${homefield}, includeInactive: ${queryParams.includeInactive}`);
+    console.log(`Fetching club fields for selectedAirfield: ${selectedAirfield}, includeInactive: ${queryParams.includeInactive}`);
 
-    // Get the club's homefield and create airfield options
+    // Get the selected airfield and create airfield options
     const airfieldOptions = [
-      { id: homefield, name: `${homefield} - ${getAirfieldName(homefield)}` }
+      { id: selectedAirfield, name: `${selectedAirfield} - ${getAirfieldName(selectedAirfield)}` }
     ];
 
     // If includeInactive is true, we could add more fields here from database

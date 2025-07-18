@@ -94,7 +94,8 @@ export const aircraftSchema = z.object({
  */
 export const authRequestSchema = z.object({
   clubId: nonEmptyStringSchema,
-  pin: nonEmptyStringSchema
+  pin: nonEmptyStringSchema,
+  selectedAirfield: optionalNonEmptyStringSchema
 })
 
 /**

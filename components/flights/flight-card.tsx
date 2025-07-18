@@ -4,7 +4,7 @@ import { Card } from "@/components/ui/card"
 import { Badge } from "@/components/ui/badge"
 import { Button } from "@/components/ui/button"
 import { Tooltip, TooltipContent, TooltipTrigger, TooltipProvider } from "@/components/ui/tooltip"
-import { Clock, GraduationCap, MapPin, PlaneLanding, PlaneTakeoff, Users, Trash, Copy, User, FileText, RotateCcw } from "lucide-react"
+import { Clock, GraduationCap, MapPin, PlaneLanding, PlaneTakeoff, Users, Trash, Copy, User, FileText, RotateCcw, Building } from "lucide-react"
 import Image from "next/image"
 import { forwardRef, useState, useEffect } from "react"
 import type { Flight } from "@/types/flight"
@@ -38,6 +38,9 @@ interface FlightCardProps {
   sequentialNumber?: number
   flarmStatus?: 'online' | 'offline' | 'unknown' | null
   isDuplicating?: boolean
+  currentClubId?: string
+  currentClubHomefield?: string
+  currentAirfield?: string
 }
 
 export const FlightCard = forwardRef<HTMLDivElement, FlightCardProps>(({
@@ -55,10 +58,20 @@ export const FlightCard = forwardRef<HTMLDivElement, FlightCardProps>(({
   missingPilotWarning = false,
   sequentialNumber,
   flarmStatus = null,
-  isDuplicating = false
+  isDuplicating = false,
+  currentClubId,
+  currentClubHomefield,
+  currentAirfield
 }, ref) => {
   // Add animation state for visual highlighting
   const [highlight, setHighlight] = useState(false);
+  
+  // Determine if this flight can be edited/deleted by the current club
+  // Rule: Home club of the airfield can edit all flights, visiting clubs can only edit their own flights
+  const isHomeClubOfAirfield = currentClubHomefield === currentAirfield;
+  const canEdit = isHomeClubOfAirfield || flight.isOwnFlight !== false; // Home club can edit all, others can only edit their own
+  const isExternalFlight = flight.isOwnFlight === false;
+  
   
   // Effect to handle highlight animation
   useEffect(() => {
@@ -83,6 +96,9 @@ export const FlightCard = forwardRef<HTMLDivElement, FlightCardProps>(({
     if (highlight) {
       return 'border-amber-500 border-2 shadow-md';
     }
+    if (isExternalFlight) {
+      return 'border-gray-400 border-2 border-dashed';
+    }
     return 'border';
   };
 
@@ -90,6 +106,9 @@ export const FlightCard = forwardRef<HTMLDivElement, FlightCardProps>(({
   const getHighlightClass = () => {
     if (highlight) {
       return 'bg-amber-50';
+    }
+    if (isExternalFlight) {
+      return 'bg-gray-50';
     }
     return '';
   };
@@ -160,8 +179,8 @@ export const FlightCard = forwardRef<HTMLDivElement, FlightCardProps>(({
         <div 
           ref={ref}
           id={`flight-${flight.id}-table`}
-          className={`hidden md:grid grid-cols-[50px_1.5fr_2fr_0.8fr_0.8fr_0.8fr_150px] gap-2 cursor-pointer items-center ${paddingClass} px-3 rounded-md ${statusClasses} ${getBorderStyle()} hover:shadow-md ${getHighlightClass()}`}
-          onClick={() => onEditClick(flight)}
+          className={`hidden md:grid grid-cols-[50px_1.5fr_2fr_0.8fr_0.8fr_0.8fr_150px] gap-2 ${canEdit ? 'cursor-pointer hover:shadow-md' : 'cursor-not-allowed'} items-center ${paddingClass} px-3 rounded-md ${statusClasses} ${getBorderStyle()} ${getHighlightClass()}`}
+          onClick={() => canEdit && onEditClick(flight)}
         >
           {/* Sequential number column */}
           <div className={`${textSizeClass} font-semibold text-center`}>
@@ -252,6 +271,9 @@ export const FlightCard = forwardRef<HTMLDivElement, FlightCardProps>(({
             {flight.coPilot && (
               <span className={`${smallTextClass} font-bold text-muted-foreground`}>{flight.coPilot.name}</span>
             )}
+            {isExternalFlight && flight.club?.name && (
+              <span className={`${smallTextClass} text-blue-600 font-semibold italic`}>{flight.club.name}</span>
+            )}
           </div>
 
           {/* Start time column */}
@@ -300,10 +322,12 @@ export const FlightCard = forwardRef<HTMLDivElement, FlightCardProps>(({
                   onReplayFlight(flight);
                 }
               }}
-              disabled={flight.deleted || flight.status === 'deleted'}
+              disabled={flight.deleted || flight.status === 'deleted' || !canEdit}
               className={`${textSizeClass} font-semibold ${badgePaddingClass} min-w-[90px] whitespace-nowrap flex items-center justify-center rounded-md transition-all ${
                 flight.deleted || flight.status === 'deleted'
                   ? "bg-red-200 text-red-900 border border-red-500 cursor-not-allowed"
+                : !canEdit
+                  ? "bg-gray-200 text-gray-600 border border-gray-400 cursor-not-allowed"
                   : flight.status === "pending"
                     ? "bg-yellow-200 text-yellow-900 border border-yellow-500 hover:bg-yellow-300 cursor-pointer"
                     : flight.status === "in_flight"
@@ -317,7 +341,7 @@ export const FlightCard = forwardRef<HTMLDivElement, FlightCardProps>(({
             </button>
             
             {/* Duplicate button */}
-            {onDuplicate && (
+            {onDuplicate && canEdit && (
               <Tooltip>
                 <TooltipTrigger asChild>
                   <Button
@@ -353,14 +377,16 @@ export const FlightCard = forwardRef<HTMLDivElement, FlightCardProps>(({
         <Card
           ref={tableMode ? undefined : ref} // Only use ref on card view if not in table mode
           id={`flight-${flight.id}-card`}
-          className={`${tableMode ? "md:hidden" : ""} overflow-hidden md:hover:shadow-md cursor-pointer md:active:bg-accent/30 ${statusClasses} ${getBorderStyle()} ${getHighlightClass()}`}
-          onClick={() => onEditClick(flight)}
+          className={`${tableMode ? "md:hidden" : ""} overflow-hidden ${canEdit ? 'md:hover:shadow-md cursor-pointer md:active:bg-accent/30' : 'cursor-not-allowed'} ${statusClasses} ${getBorderStyle()} ${getHighlightClass()}`}
+          onClick={() => canEdit && onEditClick(flight)}
         >
           <div className="p-3 space-y-2.5">
             {/* Top row: Aircraft + Actions */}
             <div className="flex items-center justify-between">
               <div className="flex items-center gap-2.5">
-                <h2 className="text-xl font-bold text-gray-900">{flight.aircraft.registration}</h2>
+                <div className="flex flex-col">
+                  <h2 className="text-xl font-bold text-gray-900">{flight.aircraft.registration}</h2>
+                </div>
                 <div className="flex items-center gap-1">
                   {flight.isSchoolFlight && (
                     <Tooltip>
@@ -395,6 +421,18 @@ export const FlightCard = forwardRef<HTMLDivElement, FlightCardProps>(({
                       </TooltipTrigger>
                       <TooltipContent>
                         <p>Gæstepilot ombord</p>
+                      </TooltipContent>
+                    </Tooltip>
+                  )}
+                  {isExternalFlight && (
+                    <Tooltip>
+                      <TooltipTrigger asChild>
+                        <div className="bg-gray-100 rounded-full p-0.5">
+                          <Building className="h-3.5 w-3.5 text-gray-600" />
+                        </div>
+                      </TooltipTrigger>
+                      <TooltipContent>
+                        <p>{flight.club?.name ? `Flyvning fra ${flight.club.name}` : 'Flyvning fra anden klub'}</p>
                       </TooltipContent>
                     </Tooltip>
                   )}
@@ -435,7 +473,7 @@ export const FlightCard = forwardRef<HTMLDivElement, FlightCardProps>(({
               </div>
               
               {/* Duplicate button */}
-              {onDuplicate && (
+              {onDuplicate && canEdit && (
                 <Button
                   variant="ghost"
                   size="icon"
@@ -466,6 +504,9 @@ export const FlightCard = forwardRef<HTMLDivElement, FlightCardProps>(({
                     <div className="text-base font-semibold text-gray-900 truncate">{flight.pilot.name}</div>
                     {flight.coPilot && (
                       <div className="text-sm text-gray-600 truncate">{flight.coPilot.name}</div>
+                    )}
+                    {isExternalFlight && flight.club?.name && (
+                      <div className="text-sm text-blue-600 font-semibold italic truncate">{flight.club.name}</div>
                     )}
                   </div>
                 ) : (
@@ -522,10 +563,12 @@ export const FlightCard = forwardRef<HTMLDivElement, FlightCardProps>(({
                   onReplayFlight(flight);
                 }
               }}
-              disabled={flight.deleted || flight.status === 'deleted'}
+              disabled={flight.deleted || flight.status === 'deleted' || !canEdit}
               className={`w-full py-2.5 px-3 rounded-lg font-semibold text-base transition-all ${
                 flight.deleted || flight.status === 'deleted'
                   ? "bg-red-100 text-red-800 border border-red-200 cursor-not-allowed opacity-60"
+                : !canEdit
+                  ? "bg-gray-100 text-gray-600 border border-gray-300 cursor-not-allowed opacity-60"
                   : flight.status === "pending"
                     ? "bg-amber-100 text-amber-800 border border-amber-200 md:hover:bg-amber-200 md:active:bg-amber-300"
                     : flight.status === "in_flight"

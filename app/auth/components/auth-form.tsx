@@ -23,34 +23,63 @@ interface Club {
   id: string
   name: string
   homefield: string | null
+  allowed_airfields: string[]
+}
+
+interface Airfield {
+  id: string
+  ident: string
+  name: string
+  icao: string
+  type: string
 }
 
 interface AuthFormProps {
   clubs: Club[]
+  airfields: Airfield[]
 }
 
 const LAST_SELECTED_CLUB_ID_KEY = 'lastSelectedClubId'
+const LAST_SELECTED_AIRFIELD_KEY = 'lastSelectedAirfield'
 
-export default function AuthForm({ clubs }: AuthFormProps) {
+export default function AuthForm({ clubs, airfields }: AuthFormProps) {
   const router = useRouter()
   const [pin, setPin] = useState<string[]>([])
   const [error, setError] = useState<string>("")
   const [shake, setShake] = useState(false)
   const [isLoading, setIsLoading] = useState(false)
   const [selectedClub, setSelectedClub] = useState<Club | null>(null)
+  const [selectedAirfield, setSelectedAirfield] = useState<Airfield | null>(null)
   const [openClubSelector, setOpenClubSelector] = useState(false)
+  const [openAirfieldSelector, setOpenAirfieldSelector] = useState(false)
 
-  // Set last selected club from localStorage on mount
+  // Set last selected club and airfield from localStorage on mount
   useEffect(() => {
     const lastClubId = localStorage.getItem(LAST_SELECTED_CLUB_ID_KEY)
+    const lastAirfieldIdent = localStorage.getItem(LAST_SELECTED_AIRFIELD_KEY)
+    
     if (lastClubId && clubs.length > 0) {
       const foundClub = clubs.find(club => club.id === lastClubId)
       if (foundClub) {
         setSelectedClub(foundClub)
         console.log("Restored last selected club:", foundClub.name)
+        
+        // Try to restore last selected airfield
+        if (lastAirfieldIdent && airfields.length > 0) {
+          const foundAirfield = airfields.find(airfield => airfield.icao === lastAirfieldIdent)
+          if (foundAirfield) {
+            setSelectedAirfield(foundAirfield)
+            console.log("Restored last selected airfield:", foundAirfield.name)
+          }
+        }
       }
     }
-  }, [clubs])
+  }, [clubs, airfields])
+
+  // Get all available airfields (no filtering by club)
+  const getAvailableAirfields = (): Airfield[] => {
+    return airfields
+  }
 
   const handleKeyPress = (key: string) => {
     if (pin.length < 4 && !isLoading) {
@@ -72,7 +101,7 @@ export default function AuthForm({ clubs }: AuthFormProps) {
   }
 
   const handleSubmit = async () => {
-    if (!selectedClub || pin.length !== 4 || isLoading) return
+    if (!selectedClub || !selectedAirfield || pin.length !== 4 || isLoading) return
 
     setIsLoading(true)
     setError("")
@@ -84,7 +113,11 @@ export default function AuthForm({ clubs }: AuthFormProps) {
         headers: {
           "Content-Type": "application/json",
         },
-        body: JSON.stringify({ clubId: selectedClub.id, pin: enteredPin }),
+        body: JSON.stringify({ 
+          clubId: selectedClub.id, 
+          pin: enteredPin,
+          selectedAirfield: selectedAirfield.icao
+        }),
       })
 
       const result = await response.json()
@@ -123,14 +156,14 @@ export default function AuthForm({ clubs }: AuthFormProps) {
 
   // Auto-submit when PIN is complete
   useEffect(() => {
-    if (pin.length === 4 && selectedClub) {
+    if (pin.length === 4 && selectedClub && selectedAirfield) {
       const timer = setTimeout(() => {
         handleSubmit()
       }, 300)
       return () => clearTimeout(timer)
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [pin, selectedClub])
+  }, [pin, selectedClub, selectedAirfield])
 
   // Show error if no clubs were loaded
   if (clubs.length === 0) {
@@ -183,6 +216,20 @@ export default function AuthForm({ clubs }: AuthFormProps) {
                             setError("")
                             localStorage.setItem(LAST_SELECTED_CLUB_ID_KEY, club.id)
                             console.log("Saved last selected club:", club.name)
+                            
+                            // Auto-select club's homefield if available
+                            if (club.homefield) {
+                              const homefieldAirfield = airfields.find(airfield => airfield.icao === club.homefield)
+                              if (homefieldAirfield) {
+                                setSelectedAirfield(homefieldAirfield)
+                                localStorage.setItem(LAST_SELECTED_AIRFIELD_KEY, homefieldAirfield.icao)
+                                console.log("Auto-selected club homefield:", homefieldAirfield.name)
+                              } else {
+                                setSelectedAirfield(null) // Reset if homefield not found
+                              }
+                            } else {
+                              setSelectedAirfield(null) // Reset if no homefield defined
+                            }
                           }}
                           className="text-base sm:text-lg py-3"
                         >
@@ -202,15 +249,73 @@ export default function AuthForm({ clubs }: AuthFormProps) {
             </Popover>
           </div>
 
+          {/* Airfield Selector */}
+          {selectedClub && (
+            <div className="mb-6">
+              <Popover open={openAirfieldSelector} onOpenChange={setOpenAirfieldSelector}>
+                <PopoverTrigger asChild>
+                  <Button
+                    variant="outline"
+                    role="combobox"
+                    aria-expanded={openAirfieldSelector}
+                    className="w-full justify-between h-14 text-lg sm:text-xl"
+                    disabled={isLoading}
+                  >
+                    {selectedAirfield ? `${selectedAirfield.name} (${selectedAirfield.icao})` : "Vælg flyveplads..."}
+                    <ChevronsUpDown className="ml-3 h-5 w-5 shrink-0 opacity-50" />
+                  </Button>
+                </PopoverTrigger>
+                <PopoverContent className="w-[--radix-popover-trigger-width] p-0">
+                  <Command>
+                    <CommandInput placeholder="Søg efter flyveplads..." className="h-12 text-base sm:text-lg" />
+                    <CommandList>
+                      <CommandEmpty className="py-6 text-center text-base sm:text-lg">
+                        Ingen flyvepladser fundet.
+                      </CommandEmpty>
+                      <CommandGroup>
+                        {getAvailableAirfields().map((airfield) => (
+                          <CommandItem
+                            key={airfield.id}
+                            value={`${airfield.name} ${airfield.icao}`}
+                            onSelect={() => {
+                              setSelectedAirfield(airfield)
+                              setOpenAirfieldSelector(false)
+                              setPin([])
+                              setError("")
+                              localStorage.setItem(LAST_SELECTED_AIRFIELD_KEY, airfield.icao)
+                              console.log("Saved last selected airfield:", airfield.name)
+                            }}
+                            className="text-base sm:text-lg py-3"
+                          >
+                            <Check
+                              className={cn(
+                                "mr-3 h-5 w-5",
+                                selectedAirfield?.id === airfield.id ? "opacity-100" : "opacity-0"
+                              )}
+                            />
+                            <div className="flex flex-col">
+                              <span className="font-medium">{airfield.name}</span>
+                              <span className="text-sm text-gray-500">{airfield.icao} • {airfield.type}</span>
+                            </div>
+                          </CommandItem>
+                        ))}
+                      </CommandGroup>
+                    </CommandList>
+                  </Command>
+                </PopoverContent>
+              </Popover>
+            </div>
+          )}
+
           {/* PIN Display */}
           <div className={`mb-6 flex justify-center space-x-4 ${shake ? 'animate-shake' : ''}`}>
             {[0, 1, 2, 3].map((i) => (
               <div
                 key={i}
                 className={`h-7 w-7 rounded-full border-2 sm:h-8 sm:w-8 ${
-                  selectedClub ? 'border-primary' : 'border-slate-300'
+                  selectedClub && selectedAirfield ? 'border-primary' : 'border-slate-300'
                 } ${
-                  pin.length > i ? (selectedClub ? "bg-primary" : "bg-slate-300") : "bg-transparent"
+                  pin.length > i ? (selectedClub && selectedAirfield ? "bg-primary" : "bg-slate-300") : "bg-transparent"
                 } transition-all duration-200`}
               />
             ))}
@@ -236,11 +341,11 @@ export default function AuthForm({ clubs }: AuthFormProps) {
                     else if (specialAction === 'clear') handleClear()
                     else if (specialAction === 'del') handleDelete()
                   }}
-                  disabled={!selectedClub || isLoading}
+                  disabled={!selectedClub || !selectedAirfield || isLoading}
                   className={cn(
                     "aspect-square rounded-full text-2xl sm:text-3xl font-medium transition-all duration-150 shadow-md",
                     "flex items-center justify-center focus:outline-none focus:ring-2 focus:ring-primary/40 active:scale-95",
-                    !selectedClub || isLoading
+                    !selectedClub || !selectedAirfield || isLoading
                       ? "bg-slate-200 text-slate-400 cursor-not-allowed"
                       : specialAction
                       ? "bg-slate-200 hover:bg-slate-300 active:bg-slate-300/80"

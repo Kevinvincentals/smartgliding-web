@@ -370,8 +370,8 @@ export function SOCKET(
       if (token) {
         console.log(`Client ${clientId} attempting JWT authentication via cookie.`);
         verifyToken(token).then(decodedPayload => {
-          if (!decodedPayload.id || !decodedPayload.homefield) {
-            console.warn(`Client ${clientId} cookie JWT auth failed: token missing id or homefield. Payload:`, decodedPayload);
+          if (!decodedPayload.id || (!decodedPayload.selectedAirfield && !decodedPayload.homefield)) {
+            console.warn(`Client ${clientId} cookie JWT auth failed: token missing id or airfield. Payload:`, decodedPayload);
             if (client.readyState === WebSocket.OPEN) {
               client.send(JSON.stringify({ type: 'auth_failure', message: 'Invalid token payload from cookie.' }));
             }
@@ -379,7 +379,7 @@ export function SOCKET(
           }
 
           clientInfo.isAuthenticated = true;
-          clientInfo.mainChannel = decodedPayload.homefield;
+          clientInfo.mainChannel = decodedPayload.selectedAirfield || decodedPayload.homefield || null;
           clientInfo.clubId = decodedPayload.id;
           authenticatedViaCookie = true;
           console.log(`Client ${clientId} authenticated via cookie. Club ID: ${clientInfo.clubId}, Channel: ${clientInfo.mainChannel}`);

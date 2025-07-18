@@ -34,6 +34,10 @@ export interface JWTPayload {
   }
   /** Home airfield identifier */
   homefield?: string
+  /** Selected airfield identifier (from login) */
+  selectedAirfield?: string
+  /** Allowed airfields for this club */
+  allowedAirfields?: string[]
   /** Token expiration timestamp */
   exp?: number
   /** Token issued at timestamp */
@@ -60,6 +64,8 @@ export interface AuthResponse {
   clubId?: string
   /** Home airfield */
   homefield?: string
+  /** Selected airfield identifier (from login) */
+  selectedAirfield?: string
   /** Error message if failed */
   error?: string
 }

@@ -5,6 +5,7 @@ import { ClockIcon, User, Wifi, WifiOff, Plus, Plane, MapPin, BarChart2, Setting
 import { Badge } from "@/components/ui/badge"
 import { useStartliste } from "@/contexts/startlist-context"
 import { AddFlightDialog } from "@/components/flights/add-flight-dialog"
+import { ChangeAirfieldDialog } from "@/components/dialogs/change-airfield-dialog"
 import { useIsMobile } from "@/hooks/use-mobile"
 
 interface HeaderInfoProps {
@@ -41,6 +42,7 @@ export function StartlisteHeader({
   const [trafficLeader, setTrafficLeader] = useState<string>("Ej valgt")
   const [gameLeader, setGameLeader] = useState<string>("Ej valgt")
   const [schoolEnabled, setSchoolEnabled] = useState<boolean>(false)
+  const [changeAirfieldDialogOpen, setChangeAirfieldDialogOpen] = useState(false)
   const isMobile = useIsMobile()
 
   // Get context for navigation
@@ -51,7 +53,8 @@ export function StartlisteHeader({
     setAddFlightDialogOpen,
     handleAddFlight,
     airfieldOptions,
-    socketRef
+    socketRef,
+    currentAirfield
   } = useStartliste()
 
   // Load school setting from localStorage
@@ -108,10 +111,15 @@ export function StartlisteHeader({
       const fullName = `${dailyInfo.trafficLeader.firstname} ${dailyInfo.trafficLeader.lastname}`;
       setTrafficLeader(fullName);
     } else if (dailyInfo) {
-      // If dailyInfo exists but no trafficLeader, set to "Ej valgt"
-      setTrafficLeader("Ej valgt");
+      // Check if club is operating from a different airfield than their home field
+      const isOperatingFromDifferentAirfield = currentAirfield && dailyInfo.club?.homefield && 
+                                             currentAirfield !== dailyInfo.club.homefield;
+      
+      // If operating from different airfield, roles are optional - show "Ikke påkrævet"
+      // If operating from home airfield, roles are required - show "Ej valgt"
+      setTrafficLeader(isOperatingFromDifferentAirfield ? "Ikke påkrævet" : "Ej valgt");
     }
-  }, [dailyInfo]);
+  }, [dailyInfo, currentAirfield]);
 
   // Set towPerson from dailyInfo if available
   useEffect(() => {
@@ -119,10 +127,15 @@ export function StartlisteHeader({
       const fullName = `${dailyInfo.towPerson.firstname} ${dailyInfo.towPerson.lastname}`;
       setGameLeader(fullName);
     } else if (dailyInfo) {
-      // If dailyInfo exists but no towPerson, set to "Ej valgt"
-      setGameLeader("Ej valgt");
+      // Check if club is operating from a different airfield than their home field
+      const isOperatingFromDifferentAirfield = currentAirfield && dailyInfo.club?.homefield && 
+                                             currentAirfield !== dailyInfo.club.homefield;
+      
+      // If operating from different airfield, roles are optional - show "Ikke påkrævet"
+      // If operating from home airfield, roles are required - show "Ej valgt"
+      setGameLeader(isOperatingFromDifferentAirfield ? "Ikke påkrævet" : "Ej valgt");
     }
-  }, [dailyInfo]);
+  }, [dailyInfo, currentAirfield]);
 
   // Update clock and date
   useEffect(() => {
@@ -165,7 +178,6 @@ export function StartlisteHeader({
           </button>
           
           <div className="flex items-center gap-2">
-            <span className="text-lg font-medium">{time}</span>
             {(() => {
               const status = getConnectionStatus();
               const StatusIcon = status.icon;
@@ -176,6 +188,7 @@ export function StartlisteHeader({
                   className={`${status.classes} flex items-center gap-1 px-2 py-0.5`}
                 >
                   <StatusIcon className="h-3.5 w-3.5" />
+                  <span className="text-xs">{status.text}</span>
                 </Badge>
               );
             })()}
@@ -189,12 +202,12 @@ export function StartlisteHeader({
     <div className="fixed top-0 left-0 right-0 z-40 bg-background/95 backdrop-blur-sm shadow-md">
       {/* Header Info Section */}
       <div 
-        className="header-info flex flex-col sm:flex-row sm:justify-between items-start sm:items-center gap-2 sm:gap-0 px-3 sm:px-4 py-2 sm:py-3 bg-slate-100 sm:h-[70px] relative"
+        className="header-info flex flex-col sm:flex-row sm:justify-between items-start sm:items-center gap-1.5 sm:gap-0 px-3 sm:px-4 py-2 sm:py-3 bg-slate-100 sm:h-[70px] relative"
       >
         {/* Floating Livekort button - only on mobile, positioned on far right */}
         <button
           onClick={() => navigateToPage('livemap')}
-          className={`sm:hidden absolute top-2 right-3 px-3 py-1.5 rounded-lg text-sm font-medium transition-colors flex items-center gap-1.5 z-20
+          className={`sm:hidden absolute top-1/2 -translate-y-1/2 right-3 px-3 py-1.5 rounded-lg text-sm font-medium transition-colors flex items-center gap-1.5 z-20
             ${currentPage === 'livemap' 
               ? 'bg-primary text-primary-foreground' 
               : 'bg-gray-200 text-gray-700 hover:bg-gray-300'}`}
@@ -203,9 +216,20 @@ export function StartlisteHeader({
           Livekort
         </button>
         
-        {/* Traffic alert badge in the middle - absolute positioning for perfect centering */}
-        {tcasAlert && tcasAlert.type === 'landing_incursion' && (
-          <div className="hidden sm:flex absolute left-1/2 top-1/2 transform -translate-x-1/2 -translate-y-1/2 z-10">
+        {/* Center badges container - absolute positioning for perfect centering */}
+        <div className="hidden sm:flex absolute left-1/2 top-1/2 transform -translate-x-1/2 -translate-y-1/2 z-10 gap-2">
+          {/* Current club and airfield badge - clickable */}
+          {currentAirfield && (
+            <Badge 
+              className="bg-blue-100 hover:bg-blue-200 text-blue-800 border border-blue-300 px-3 py-1.5 text-sm font-medium whitespace-nowrap cursor-pointer transition-colors"
+              onClick={() => setChangeAirfieldDialogOpen(true)}
+            >
+              {dailyInfo?.club?.name ? `${dailyInfo.club.name} - ${currentAirfield}` : currentAirfield}
+            </Badge>
+          )}
+          
+          {/* Traffic alert badge */}
+          {tcasAlert && tcasAlert.type === 'landing_incursion' && (
             <Badge 
               className={`
                 bg-orange-100 hover:bg-orange-100 text-orange-800 border border-orange-300 
@@ -215,12 +239,12 @@ export function StartlisteHeader({
             >
               Trafik! {formatAircraftRegistrations(tcasAlert.aircraft)}
             </Badge>
-          </div>
-        )}
+          )}
+        </div>
         
         <div className="flex flex-col">
-          <div className="flex items-center gap-2">
-            <div className="flex items-center min-w-[120px]">
+          <div className="flex items-center gap-1 sm:gap-2">
+            <div className="hidden sm:flex items-center min-w-[120px]">
               <ClockIcon className="h-5 w-5 mr-2" />
               <span className="text-lg font-medium">{time}</span>
             </div>
@@ -233,13 +257,23 @@ export function StartlisteHeader({
               return (
                 <Badge
                   variant="outline"
-                  className={`${status.classes} flex items-center gap-1 px-2 py-0.5`}
+                  className={`${status.classes} flex items-center gap-1 px-2 py-0.5 text-sm`}
                 >
                   <StatusIcon className="h-3.5 w-3.5" />
                   <span>{status.text}</span>
                 </Badge>
               );
             })()}
+            
+            {/* Mobile view for airfield badge - clickable */}
+            {currentAirfield && (
+              <Badge 
+                className="sm:hidden bg-blue-100 hover:bg-blue-200 text-blue-800 border border-blue-300 px-2.5 py-0.5 text-sm font-medium cursor-pointer transition-colors"
+                onClick={() => setChangeAirfieldDialogOpen(true)}
+              >
+                {dailyInfo?.club?.name ? `${dailyInfo.club.name} - ${currentAirfield}` : currentAirfield}
+              </Badge>
+            )}
             
             {/* Mobile view for TCAS alert */}
             {tcasAlert && tcasAlert.type === 'landing_incursion' && (
@@ -354,6 +388,13 @@ export function StartlisteHeader({
           </div>
         </div>
       )}
+
+      {/* Change Airfield Dialog */}
+      <ChangeAirfieldDialog
+        open={changeAirfieldDialogOpen}
+        onOpenChange={setChangeAirfieldDialogOpen}
+        currentAirfield={currentAirfield}
+      />
     </div>
   )
 }

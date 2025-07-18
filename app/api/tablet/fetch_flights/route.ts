@@ -28,6 +28,11 @@ interface FlightWithDetails extends Omit<FlightLogbook, 'status'> {
     is_twoseater: boolean;
     flarm_id: string | null;
   } | null;
+  club: {
+    id: string;
+    name: string;
+    homefield: string | null;
+  } | null;
   status: FlightStatus;
   guest_pilot1_name: string | null;
   guest_pilot2_name: string | null;
@@ -61,6 +66,7 @@ interface FlightResponse {
   createdAt: Date;
   updatedAt: Date;
   isPrivatePlane: boolean;
+  isOwnFlight: boolean;
   pilot1: {
     id: string;
     firstname: string;
@@ -80,6 +86,11 @@ interface FlightResponse {
     flarm_id: string | null;
     has_valid_flarm: boolean;
   };
+  club: {
+    id: string;
+    name: string;
+    homefield: string | null;
+  } | null;
 }
 
 /**
@@ -131,7 +142,7 @@ export async function GET(request: NextRequest): Promise<NextResponse<FlightsApi
     
     const jwtPayload: JWTPayload = JSON.parse(jwtPayloadString);
     const clubId = jwtPayload.clubId || jwtPayload.id;
-    const homefield = jwtPayload.homefield || jwtPayload.club?.homefield || queryParams.airfield;
+    const selectedAirfield = jwtPayload.selectedAirfield || jwtPayload.homefield || queryParams.airfield;
 
     if (!clubId) {
       return NextResponse.json<FlightsApiResponse>(
@@ -150,12 +161,27 @@ export async function GET(request: NextRequest): Promise<NextResponse<FlightsApi
     const startOfToday = getStartOfTimezoneDayUTC(today);
     const endOfToday = getEndOfTimezoneDayUTC(today);
 
-    // Build query conditions for both active and deleted flights
+    // Build query conditions for flights at the selected airfield
     const baseWhereClause: Prisma.FlightLogbookWhereInput = {
-      clubId, // All flights must belong to this club
       OR: [
-        { takeoff_airfield: homefield },
-        { landing_airfield: homefield }
+        // Flights created by this club at the selected airfield
+        {
+          clubId,
+          OR: [
+            { takeoff_airfield: selectedAirfield },
+            { landing_airfield: selectedAirfield },
+            { operating_airfield: selectedAirfield }
+          ]
+        },
+        // Flights created by other clubs at the selected airfield (for visibility)
+        {
+          clubId: { not: clubId },
+          OR: [
+            { takeoff_airfield: selectedAirfield },
+            { landing_airfield: selectedAirfield },
+            { operating_airfield: selectedAirfield }
+          ]
+        }
       ],
       AND: [
         {
@@ -226,6 +252,13 @@ export async function GET(request: NextRequest): Promise<NextResponse<FlightsApi
               is_twoseater: true,
               flarm_id: true
             }
+          },
+          club: {
+            select: {
+              id: true,
+              name: true,
+              homefield: true
+            }
           }
         },
         orderBy: {
@@ -246,7 +279,7 @@ export async function GET(request: NextRequest): Promise<NextResponse<FlightsApi
     
     const privatePlaneIds = new Set(privatePlanes.map((pp: any) => pp.planeId).filter(Boolean));
 
-    // Transform flights for response (no need for deduplication since we have a single query now)
+    // Transform flights for response with club visibility information
     const flightsWithStatus: FlightResponse[] = flights.map(flight => {
       let status: FlightStatus = 'pending';
       
@@ -266,6 +299,9 @@ export async function GET(request: NextRequest): Promise<NextResponse<FlightsApi
       
       // Check if this plane is marked as private for today
       const isPrivatePlane = flight.planeId ? privatePlaneIds.has(flight.planeId) : false;
+      
+      // Check if this flight belongs to the current club
+      const isOwnFlight = flight.clubId === clubId;
       
       // Handle pilot data (club members vs guests)
       const pilot1 = flight.pilot1 || (flight.guest_pilot1_name ? {
@@ -305,6 +341,7 @@ export async function GET(request: NextRequest): Promise<NextResponse<FlightsApi
         createdAt: flight.createdAt,
         updatedAt: flight.updatedAt,
         isPrivatePlane: isPrivatePlane,
+        isOwnFlight: isOwnFlight,
         pilot1,
         pilot2,
         plane: flight.plane ? {
@@ -319,7 +356,8 @@ export async function GET(request: NextRequest): Promise<NextResponse<FlightsApi
           is_twoseater: isDoubleSeater,
           flarm_id: flarmId,
           has_valid_flarm: hasValidFlarm
-        }
+        },
+        club: flight.club
       };
     });
 

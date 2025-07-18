@@ -35,17 +35,23 @@ export async function GET(request: Request) {
       );
     }
 
-    // Fetch the club name using clubIdFromToken
+    // Fetch the club information including homefield
     let clubName = 'Ukendt Klub'; // Default club name
+    let clubHomefield = null;
     if (clubIdFromToken) {
       const club = await prisma.club.findUnique({
         where: { id: clubIdFromToken },
-        select: { name: true },
+        select: { name: true, homefield: true },
       });
       if (club?.name) {
         clubName = club.name;
+        clubHomefield = club.homefield;
       }
     }
+
+    // Get selected airfield from JWT payload
+    const jwtPayload = JSON.parse(jwtPayloadHeader);
+    const selectedAirfield = jwtPayload.selectedAirfield;
 
     // Get date from query parameters or use today's date
     const url = new URL(request.url);
@@ -127,29 +133,43 @@ export async function GET(request: Request) {
       }
     }
 
-    // Fetch flights for the specified day and club (exclude pending flights)
-    const flights = await prisma.flightLogbook.findMany({
-      where: {
-        clubId: clubIdFromToken, // Filter by clubId
-        takeoff_time: { not: null }, // Exclude pending flights (must have taken off)
-        OR: [
-          // Flights that took off on the requested day
-          {
-            takeoff_time: {
-              gte: startOfDay,
-              lte: endOfDay
-            }
-          },
-          // Flights that landed on the requested day
-          {
-            landing_time: {
-              gte: startOfDay,
-              lte: endOfDay
-            }
+    // Determine if this is the home club of the airfield
+    const isHomeClubOfAirfield = clubHomefield === selectedAirfield;
+    
+    // Build the flight query filter - home club sees all flights at their airfield
+    const flightFilter: any = {
+      takeoff_time: { not: null }, // Exclude pending flights (must have taken off)
+      OR: [
+        // Flights that took off on the requested day
+        {
+          takeoff_time: {
+            gte: startOfDay,
+            lte: endOfDay
           }
-        ],
-        deleted: false
-      },
+        },
+        // Flights that landed on the requested day
+        {
+          landing_time: {
+            gte: startOfDay,
+            lte: endOfDay
+          }
+        }
+      ],
+      deleted: false
+    };
+
+    // Add airfield/club filtering logic
+    if (isHomeClubOfAirfield) {
+      // Home club sees all flights at their airfield
+      flightFilter.operating_airfield = selectedAirfield;
+    } else {
+      // Visiting club sees only their own flights
+      flightFilter.clubId = clubIdFromToken;
+    }
+
+    // Fetch flights for the specified day
+    const flights = await prisma.flightLogbook.findMany({
+      where: flightFilter,
       include: {
         pilot1: {
           select: {
@@ -170,6 +190,13 @@ export async function GET(request: Request) {
             id: true,
             registration_id: true,
             type: true,
+          }
+        },
+        club: {
+          select: {
+            id: true,
+            name: true,
+            homefield: true
           }
         }
       },
@@ -259,14 +286,20 @@ export async function GET(request: Request) {
     };
 
     // Format airfield display
-    const formatAirfields = (takeoffAirfield: string, landingAirfield: string) => {
-      // Always display as "takeoff/landing" even if they're the same
+    const formatAirfields = (takeoffAirfield: string, landingAirfield: string | null) => {
+      // If no landing field yet (flight in progress), show only takeoff
+      if (!landingAirfield) {
+        return takeoffAirfield;
+      }
+      // Display as "takeoff/landing"
       return `${takeoffAirfield}/${landingAirfield}`;
     };
 
     // Format flight data for PDF generation
     const flightData = flights.map((flight, index) => {
-      // Format pilot names
+      // Format pilot names - include club name for external flights
+      const isExternalFlight = flight.clubId !== clubIdFromToken;
+      
       const pilot1Name = flight.pilot1 
         ? `${flight.pilot1.firstname} ${flight.pilot1.lastname}`
         : (flight.guest_pilot1_name || 'N/A');
@@ -274,6 +307,11 @@ export async function GET(request: Request) {
       const pilot2Name = flight.pilot2 
         ? `${flight.pilot2.firstname} ${flight.pilot2.lastname}`
         : (flight.guest_pilot2_name || '-');
+        
+      // Add club name for external flights
+      const clubSuffix = isExternalFlight && flight.club?.name ? ` (${flight.club.name})` : '';
+      const pilot1DisplayName = pilot1Name + clubSuffix;
+      const pilot2DisplayName = pilot2Name === '-' ? '-' : pilot2Name + clubSuffix;
       
       // Calculate flight time if available - EXACT SAME CALCULATION as in flight-card component
       let flightTimeText = '-';
@@ -298,16 +336,16 @@ export async function GET(request: Request) {
         flightTimeText = `${hours}:${minutes.toString().padStart(2, '0')}`;
       }
       
-      // Get airfield information or set default
+      // Get airfield information - don't assume landing field if not landed
       const takeoffAirfield = flight.takeoff_airfield || 'EKFS';
-      const landingAirfield = flight.landing_airfield || 'EKFS';
+      const landingAirfield = flight.landing_airfield || undefined;
       
       return {
         number: index + 1, // Flight number (1-indexed)
         registration: flight.plane ? flight.plane.registration_id : (flight.registration || 'N/A'),
         type: flight.plane ? flight.plane.type : (flight.type || '-'),
-        pilot1: pilot1Name,
-        pilot2: pilot2Name,
+        pilot1: pilot1DisplayName,
+        pilot2: pilot2DisplayName,
         isSchoolFlight: flight.is_school_flight || false,
         takeoffTime: flight.takeoff_time ? formatTimeWithColon(flight.takeoff_time.toISOString()) : '-',
         landingTime: flight.landing_time ? formatTimeWithColon(flight.landing_time.toISOString()) : '-',
@@ -315,7 +353,7 @@ export async function GET(request: Request) {
         launchMethod: flight.launch_method || '-',
         takeoffAirfield,
         landingAirfield,
-        feltDisplay: formatAirfields(takeoffAirfield, landingAirfield)
+        feltDisplay: formatAirfields(takeoffAirfield, landingAirfield ?? null)
       };
     });
     
