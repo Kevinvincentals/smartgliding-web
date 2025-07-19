@@ -168,39 +168,57 @@ export async function GET(request: NextRequest): Promise<NextResponse<Historical
     const startOfTargetDate = getStartOfTimezoneDayUTC(targetDate);
     const endOfTargetDate = getEndOfTimezoneDayUTC(targetDate);
 
-    // Build query conditions for both active and deleted flights
-    const baseWhereClause: Prisma.FlightLogbookWhereInput = {
-      clubId, // All flights must belong to this club
+    // Build query conditions using same logic as working statistics endpoint
+    const dateConditions = {
       OR: [
-        { takeoff_airfield: homefield },
-        { landing_airfield: homefield }
-      ],
-      AND: [
+        // Flights that took off on target date
         {
-          OR: [
-            // Flights that took off on target date
-            {
-              takeoff_time: {
-                gte: startOfTargetDate,
-                lte: endOfTargetDate
-              }
-            },
-            // Flights that landed on target date
-            {
-              landing_time: {
-                gte: startOfTargetDate,
-                lte: endOfTargetDate
-              }
-            },
-            // Flights created on target date but not yet taken off
-            {
-              createdAt: {
-                gte: startOfTargetDate,
-                lte: endOfTargetDate
-              }
-            }
-          ]
+          takeoff_time: {
+            gte: startOfTargetDate,
+            lte: endOfTargetDate
+          }
+        },
+        // Flights that landed on target date
+        {
+          landing_time: {
+            gte: startOfTargetDate,
+            lte: endOfTargetDate
+          }
+        },
+        // Flights created on target date but not yet taken off
+        {
+          createdAt: {
+            gte: startOfTargetDate,
+            lte: endOfTargetDate
+          }
         }
+      ]
+    };
+
+    const baseWhereClause: Prisma.FlightLogbookWhereInput = {
+      AND: [
+        // Date conditions
+        dateConditions,
+        // Only include flights that have actually happened (INFLIGHT, LANDED, or COMPLETED)
+        {
+          status: {
+            in: ['INFLIGHT', 'LANDED', 'COMPLETED']
+          }
+        }
+      ],
+      // Either match club OR match airfield (same logic as fetch_statistics)
+      OR: [
+        // Either clubId matches
+        { clubId: clubId },
+        // OR the airfield matches our homefield (either takeoff or landing)
+        ...(homefield ? [
+          {
+            OR: [
+              { takeoff_airfield: homefield },
+              { landing_airfield: homefield }
+            ]
+          }
+        ] : [])
       ]
     };
 

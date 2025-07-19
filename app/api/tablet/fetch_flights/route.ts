@@ -161,60 +161,69 @@ export async function GET(request: NextRequest): Promise<NextResponse<FlightsApi
     const startOfToday = getStartOfTimezoneDayUTC(today);
     const endOfToday = getEndOfTimezoneDayUTC(today);
 
-    // Build query conditions for flights at the selected airfield
-    const baseWhereClause: Prisma.FlightLogbookWhereInput = {
+    // Build query conditions using same logic as working historical flights and PDF endpoints
+    const dateConditions = {
       OR: [
-        // Flights created by this club at the selected airfield
+        // Flights that took off today
         {
-          clubId,
-          OR: [
-            { takeoff_airfield: selectedAirfield },
-            { landing_airfield: selectedAirfield },
-            { operating_airfield: selectedAirfield }
-          ]
+          takeoff_time: {
+            gte: startOfToday,
+            lte: endOfToday
+          }
         },
-        // Flights created by other clubs at the selected airfield (for visibility)
+        // Flights that landed today
         {
-          clubId: { not: clubId },
-          OR: [
-            { takeoff_airfield: selectedAirfield },
-            { landing_airfield: selectedAirfield },
-            { operating_airfield: selectedAirfield }
-          ]
+          landing_time: {
+            gte: startOfToday,
+            lte: endOfToday
+          }
+        },
+        // Flights created today but not yet taken off
+        {
+          createdAt: {
+            gte: startOfToday,
+            lte: endOfToday
+          }
+        },
+        // Pending flights with no times set regardless of creation date
+        {
+          takeoff_time: null,
+          landing_time: null,
+          status: 'PENDING' as const
         }
-      ],
+      ]
+    };
+
+    const baseWhereClause: Prisma.FlightLogbookWhereInput = {
       AND: [
+        // Date conditions
+        dateConditions,
+        // Include pending flights OR flights that have actually happened (INFLIGHT, LANDED, or COMPLETED)
         {
           OR: [
-            // Flights that took off today
+            { status: 'PENDING' },
             {
-              takeoff_time: {
-                gte: startOfToday,
-                lte: endOfToday
+              status: {
+                in: ['INFLIGHT', 'LANDED', 'COMPLETED']
               }
-            },
-            // Flights that landed today
-            {
-              landing_time: {
-                gte: startOfToday,
-                lte: endOfToday
-              }
-            },
-            // Flights created today but not yet taken off
-            {
-              createdAt: {
-                gte: startOfToday,
-                lte: endOfToday
-              }
-            },
-            // Pending flights with no times set regardless of creation date
-            {
-              takeoff_time: null,
-              landing_time: null,
-              status: 'PENDING' as const
             }
           ]
         }
+      ],
+      // Either match club OR match airfield (same logic as fetch_statistics and PDF)
+      OR: [
+        // Either clubId matches
+        { clubId: clubId },
+        // OR the airfield matches our selected airfield (either takeoff or landing)
+        ...(selectedAirfield ? [
+          {
+            OR: [
+              { takeoff_airfield: selectedAirfield },
+              { landing_airfield: selectedAirfield },
+              { operating_airfield: selectedAirfield }
+            ]
+          }
+        ] : [])
       ]
     };
 

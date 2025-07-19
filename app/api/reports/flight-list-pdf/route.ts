@@ -49,9 +49,8 @@ export async function GET(request: Request) {
       }
     }
 
-    // Get selected airfield from JWT payload
+    // Parse JWT payload again for consistency
     const jwtPayload = JSON.parse(jwtPayloadHeader);
-    const selectedAirfield = jwtPayload.selectedAirfield;
 
     // Get date from query parameters or use today's date
     const url = new URL(request.url);
@@ -133,12 +132,8 @@ export async function GET(request: Request) {
       }
     }
 
-    // Determine if this is the home club of the airfield
-    const isHomeClubOfAirfield = clubHomefield === selectedAirfield;
-    
-    // Build the flight query filter - home club sees all flights at their airfield
-    const flightFilter: any = {
-      takeoff_time: { not: null }, // Exclude pending flights (must have taken off)
+    // Build the flight query filter using same logic as working statistics endpoint
+    const dateConditions = {
       OR: [
         // Flights that took off on the requested day
         {
@@ -153,19 +148,45 @@ export async function GET(request: Request) {
             gte: startOfDay,
             lte: endOfDay
           }
+        },
+        // Flights created on the requested day (including those without takeoff/landing times)
+        {
+          createdAt: {
+            gte: startOfDay,
+            lte: endOfDay
+          }
         }
-      ],
-      deleted: false
+      ]
     };
 
-    // Add airfield/club filtering logic
-    if (isHomeClubOfAirfield) {
-      // Home club sees all flights at their airfield
-      flightFilter.operating_airfield = selectedAirfield;
-    } else {
-      // Visiting club sees only their own flights
-      flightFilter.clubId = clubIdFromToken;
-    }
+    const flightFilter: any = {
+      AND: [
+        // Date conditions
+        dateConditions,
+        // Not deleted
+        { deleted: false },
+        // Only include flights that have actually happened (INFLIGHT, LANDED, or COMPLETED)
+        {
+          status: {
+            in: ['INFLIGHT', 'LANDED', 'COMPLETED']
+          }
+        }
+      ],
+      // Either match club OR match airfield (same logic as fetch_statistics)
+      OR: [
+        // Either clubId matches
+        { clubId: clubIdFromToken },
+        // OR the airfield matches our homefield (either takeoff or landing)
+        ...(clubHomefield ? [
+          {
+            OR: [
+              { takeoff_airfield: clubHomefield },
+              { landing_airfield: clubHomefield }
+            ]
+          }
+        ] : [])
+      ]
+    };
 
     // Fetch flights for the specified day
     const flights = await prisma.flightLogbook.findMany({
@@ -356,11 +377,6 @@ export async function GET(request: Request) {
         feltDisplay: formatAirfields(takeoffAirfield, landingAirfield ?? null)
       };
     });
-    
-    // Format total flight time
-    const totalHours = Math.floor(totalFlightTimeMinutes / 60);
-    const totalMinutes = totalFlightTimeMinutes % 60;
-    const totalFlightTime = `${totalHours}:${totalMinutes.toString().padStart(2, '0')}`;
     
     // Format aircraft statistics
     const aircraftStatsList = Object.values(aircraftStats).map(stats => {
