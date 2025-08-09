@@ -210,20 +210,11 @@ export async function GET(request: NextRequest): Promise<NextResponse<FlightsApi
           ]
         }
       ],
-      // Either match club OR match airfield (same logic as fetch_statistics and PDF)
+      // Always filter by the selected airfield
       OR: [
-        // Either clubId matches
-        { clubId: clubId },
-        // OR the airfield matches our selected airfield (either takeoff or landing)
-        ...(selectedAirfield ? [
-          {
-            OR: [
-              { takeoff_airfield: selectedAirfield },
-              { landing_airfield: selectedAirfield },
-              { operating_airfield: selectedAirfield }
-            ]
-          }
-        ] : [])
+        { takeoff_airfield: selectedAirfield },
+        { landing_airfield: selectedAirfield },
+        { operating_airfield: selectedAirfield }
       ]
     };
 
