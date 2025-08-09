@@ -65,7 +65,7 @@ export function AircraftCard({ aircraft, isSelected, onSelect, getFlyingTime, is
   };
 
   // Format variometer average with individual values
-  const formatVariometerValue = (value?: number | null, label: string) => {
+  const formatVariometerValue = (value?: number | null) => {
     if (value === null || value === undefined) {
       return { text: '--', color: 'text-gray-400' };
     }
@@ -259,14 +259,14 @@ export function AircraftCard({ aircraft, isSelected, onSelect, getFlyingTime, is
               <div className="flex gap-3">
                 <div className="flex flex-col items-center">
                   <div className="text-xs text-gray-400">30s</div>
-                  <div className={`font-bold text-sm ${formatVariometerValue(aircraft.climb_rate_30s_avg, '30s').color}`}>
-                    {formatVariometerValue(aircraft.climb_rate_30s_avg, '30s').text}
+                  <div className={`font-bold text-sm ${formatVariometerValue(aircraft.climb_rate_30s_avg).color}`}>
+                    {formatVariometerValue(aircraft.climb_rate_30s_avg).text}
                   </div>
                 </div>
                 <div className="flex flex-col items-center">
                   <div className="text-xs text-gray-400">60s</div>
-                  <div className={`font-bold text-sm ${formatVariometerValue(aircraft.climb_rate_60s_avg, '60s').color}`}>
-                    {formatVariometerValue(aircraft.climb_rate_60s_avg, '60s').text}
+                  <div className={`font-bold text-sm ${formatVariometerValue(aircraft.climb_rate_60s_avg).color}`}>
+                    {formatVariometerValue(aircraft.climb_rate_60s_avg).text}
                   </div>
                 </div>
               </div>
