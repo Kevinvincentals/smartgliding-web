@@ -63,6 +63,17 @@ export function AircraftCard({ aircraft, isSelected, onSelect, getFlyingTime, is
     const sign = turnRate > 0 ? '+' : '';
     return `${sign}${turnRate.toFixed(1)}°/s`;
   };
+
+  // Format variometer average with individual values
+  const formatVariometerValue = (value?: number | null, label: string) => {
+    if (value === null || value === undefined) {
+      return { text: '--', color: 'text-gray-400' };
+    }
+    const sign = value >= 0 ? '+' : '';
+    const text = `${sign}${value.toFixed(1)}`;
+    const color = value > 0.2 ? 'text-green-600' : value < -0.2 ? 'text-red-600' : 'text-gray-600';
+    return { text, color };
+  };
   
   // Format the track (heading)
   const formatTrack = (track?: number) => {
@@ -242,14 +253,23 @@ export function AircraftCard({ aircraft, isSelected, onSelect, getFlyingTime, is
           </div>
           
           <div className="flex items-center gap-2">
-            <RotateCw className={`h-4 w-4 ${
-              aircraft.turnRate !== undefined && Math.abs(aircraft.turnRate) > 0.5 
-                ? Math.abs(aircraft.turnRate) > 3 ? 'text-orange-500' : 'text-blue-500'
-                : 'text-gray-400'
-            } ${aircraft.turnRate !== undefined && aircraft.turnRate < 0 ? 'transform rotate-180' : ''}`} />
-            <div>
-              <div className="text-xs text-gray-500">Drejerate</div>
-              <div className="font-semibold">{formatTurnRate(aircraft.turnRate)}</div>
+            <ArrowUp className="h-4 w-4 text-blue-500" />
+            <div className="flex-1">
+              <div className="text-xs text-gray-500 mb-1">Variometer</div>
+              <div className="flex gap-3">
+                <div className="flex flex-col items-center">
+                  <div className="text-xs text-gray-400">30s</div>
+                  <div className={`font-bold text-sm ${formatVariometerValue(aircraft.climb_rate_30s_avg, '30s').color}`}>
+                    {formatVariometerValue(aircraft.climb_rate_30s_avg, '30s').text}
+                  </div>
+                </div>
+                <div className="flex flex-col items-center">
+                  <div className="text-xs text-gray-400">60s</div>
+                  <div className={`font-bold text-sm ${formatVariometerValue(aircraft.climb_rate_60s_avg, '60s').color}`}>
+                    {formatVariometerValue(aircraft.climb_rate_60s_avg, '60s').text}
+                  </div>
+                </div>
+              </div>
             </div>
           </div>
           

@@ -46,6 +46,10 @@ export interface LiveAircraft {
   turnRate?: number
   /** Track over ground in degrees */
   track?: number
+  /** 30-second average climb rate in m/s (null if insufficient data) */
+  climb_rate_30s_avg?: number | null
+  /** 60-second average climb rate in m/s (null if insufficient data) */
+  climb_rate_60s_avg?: number | null
   /** Flight start time from tracker */
   flightStartTime?: Date
 }
