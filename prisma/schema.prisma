@@ -48,6 +48,7 @@ model Club {
   contactPhone       String?
   club_pin           Int                  @default(0)
   instructor_pin     Int                  @default(0)
+  club_api_key       String? // Optional API key for external access
   homefield          String? // Primary airfield for backward compatibility
   allowed_airfields  String[]             @default([]) // Array of airfield codes this club can operate at
   status             String               @default("active")
