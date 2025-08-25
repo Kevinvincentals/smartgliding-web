@@ -117,6 +117,7 @@ interface FlightDetails {
   distance: number | null;
   maxAltitude: number | null;
   maxSpeed: number | null;
+  date: string | null;
 }
 
 interface PeriodStats {
@@ -968,6 +969,13 @@ function Statistics({ socket, wsConnected, authenticatedChannel }: StatisticsPro
                                 </span>
                               )}
                             </div>
+                            {/* Date display */}
+                            <div className="flex items-center gap-1.5 mt-2">
+                              <CalendarIcon className="h-4 w-4 text-muted-foreground" />
+                              <span className="text-sm text-muted-foreground">
+                                {flight.date ? format(new Date(flight.date), 'dd. MMMM yyyy', { locale: da }) : 'Ingen dato'}
+                              </span>
+                            </div>
                           </div>
                           
                           {/* Time and distance info */}
@@ -1057,6 +1065,7 @@ function Statistics({ socket, wsConnected, authenticatedChannel }: StatisticsPro
                               <thead className="sticky top-0 bg-slate-100 z-10">
                                 <tr className="border-b border-slate-200">
                                   <th className="py-3 px-4 text-left font-medium text-slate-600 w-12">#</th>
+                                  <th className="py-3 px-4 text-left font-medium text-slate-600 w-24">Dato</th>
                                   <th className="py-3 px-4 text-left font-medium text-slate-600 w-28">Reg</th>
                                   <th className="py-3 px-4 text-left font-medium text-slate-600">Pilot</th>
                                   <th className="py-3 px-4 text-left font-medium text-slate-600">2. Pilot / Instruktør</th>
@@ -1098,6 +1107,9 @@ function Statistics({ socket, wsConnected, authenticatedChannel }: StatisticsPro
                                     `}
                                   >
                                     <td className="py-3 px-4 text-center">{index + 1}</td>
+                                    <td className="py-3 px-4">
+                                      {flight.date ? format(new Date(flight.date), 'dd.MM.yy', { locale: da }) : '-'}
+                                    </td>
                                     <td className="py-3 px-4">
                                       {flight.registration}
                                       {flight.isSchoolFlight && (

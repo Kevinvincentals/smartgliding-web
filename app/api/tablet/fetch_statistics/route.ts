@@ -343,7 +343,9 @@ export async function GET(request: NextRequest): Promise<NextResponse<Statistics
           // Include new flight metrics
           distance: flight.flight_distance || null,
           maxAltitude: flight.max_altitude || null,
-          maxSpeed: flight.max_speed || null
+          maxSpeed: flight.max_speed || null,
+          // Include date from takeoff_time
+          date: flight.takeoff_time ? new Date(flight.takeoff_time).toISOString() : null
         };
       });
       
