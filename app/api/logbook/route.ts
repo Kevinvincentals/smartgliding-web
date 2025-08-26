@@ -28,11 +28,12 @@ export async function GET(request: NextRequest): Promise<NextResponse<LogbookRes
       );
     }
     
-    if (!dateParam) {
+    // If searching for all flights for a DSVU ID, date is not required
+    if (!dateParam && !dsvuId) {
       return NextResponse.json<LogbookResponse>(
         {
           success: false,
-          error: 'Date parameter is required. Format: YYYY-MM-DD'
+          error: 'Date parameter is required when not searching by DSVU ID. Format: YYYY-MM-DD'
         },
         { status: 400 }
       );
@@ -60,24 +61,28 @@ export async function GET(request: NextRequest): Promise<NextResponse<LogbookRes
       );
     }
     
-    const requestedDate = new Date(dateParam);
-    if (isNaN(requestedDate.getTime())) {
-      return NextResponse.json<LogbookResponse>(
-        {
-          success: false,
-          error: 'Invalid date format. Please use YYYY-MM-DD'
-        },
-        { status: 400 }
-      );
-    }
-    
-    const startOfDay = getStartOfTimezoneDayUTC(requestedDate);
-    const endOfDay = getEndOfTimezoneDayUTC(requestedDate);
-    
-    const whereClause: any = {
+    let whereClause: any = {
       clubId: club.id,
-      deleted: false,
-      OR: [
+      deleted: false
+    };
+    
+    // Only apply date filtering if a date is provided
+    if (dateParam) {
+      const requestedDate = new Date(dateParam);
+      if (isNaN(requestedDate.getTime())) {
+        return NextResponse.json<LogbookResponse>(
+          {
+            success: false,
+            error: 'Invalid date format. Please use YYYY-MM-DD'
+          },
+          { status: 400 }
+        );
+      }
+      
+      const startOfDay = getStartOfTimezoneDayUTC(requestedDate);
+      const endOfDay = getEndOfTimezoneDayUTC(requestedDate);
+      
+      whereClause.OR = [
         {
           takeoff_time: {
             gte: startOfDay,
@@ -90,8 +95,8 @@ export async function GET(request: NextRequest): Promise<NextResponse<LogbookRes
             lte: endOfDay
           }
         }
-      ]
-    };
+      ];
+    }
     
     if (airfield) {
       whereClause.AND = whereClause.AND || [];
