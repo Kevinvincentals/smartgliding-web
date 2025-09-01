@@ -1,6 +1,7 @@
 import { NextResponse } from 'next/server'
 import { prisma } from '@/lib/prisma'
 import { generateTokens } from '@/lib/jwt'
+import { cleanupOldGuestPlanes } from '@/lib/utils'
 import { z } from 'zod'
 
 // Validation schema for admin signin
@@ -143,6 +144,11 @@ export async function POST(request: Request) {
       sameSite: 'lax',
       maxAge: refreshTokenExpiresIn,
       path: '/'
+    })
+
+    // Clean up old guest planes as a background task
+    cleanupOldGuestPlanes(clubId).catch(error => {
+      console.error('Background cleanup of guest planes failed:', error)
     })
 
     return response

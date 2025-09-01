@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from 'next/server'
 import { prisma } from '@/lib/prisma'
 import { generateTokens, type JWTPayload } from '@/lib/jwt'
 import { serialize } from 'cookie'
+import { cleanupOldGuestPlanes } from '@/lib/utils'
 import type { AuthResponse } from '@/types/tablet-api'
 import { authRequestSchema, validateRequestBody } from '@/lib/validations/tablet-api'
 
@@ -132,6 +133,11 @@ export async function POST(request: NextRequest): Promise<NextResponse<AuthRespo
     
     response.headers.append('Set-Cookie', accessTokenCookie)
     response.headers.append('Set-Cookie', refreshTokenCookie)
+
+    // Clean up old guest planes as a background task
+    cleanupOldGuestPlanes(club.id).catch(error => {
+      console.error('Background cleanup of guest planes failed:', error)
+    })
 
     return response
 
