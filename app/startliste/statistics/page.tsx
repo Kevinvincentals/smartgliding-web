@@ -8,7 +8,7 @@ import { StartlisteHeader } from "../components/header"
 import { useStartliste } from "@/contexts/startlist-context"
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
 import { 
-  BarChart2, FileBarChart, Info, Clock, Plane, Users, 
+  BarChart2, FileBarChart, Info, Clock, Plane, Users,
   CircleAlert, Calendar as CalendarIcon, GraduationCap, Timer, Award,
   ArrowUp, Ruler, Wind, MapPin, School, Play
 } from "lucide-react"
@@ -23,6 +23,7 @@ import { cn } from "@/lib/utils"
 import { toast } from "sonner"
 import dynamic from "next/dynamic"
 import React from "react"
+import { PilotDetailsDialog } from "@/components/statistics/pilot-details-dialog"
 
 // Dynamically import StatisticsReplayMap with SSR turned off
 const StatisticsReplayMap = dynamic(() => 
@@ -155,6 +156,7 @@ function Statistics({ socket, wsConnected, authenticatedChannel }: StatisticsPro
   const [selectedDate, setSelectedDate] = useState<Date>(new Date())
   const [calendarOpen, setCalendarOpen] = useState(false)
   const [selectedFlightForReplay, setSelectedFlightForReplay] = useState<{ id: string; registration: string } | null>(null)
+  const [selectedPilotForDetails, setSelectedPilotForDetails] = useState<PilotStat | null>(null)
   
   // Search and filter states
   const [pilotSearchTerm, setPilotSearchTerm] = useState("")
@@ -1211,10 +1213,19 @@ function Statistics({ socket, wsConnected, authenticatedChannel }: StatisticsPro
                           {getFilteredSortedPilots(currentStats.pilots).map(pilot => (
                         <div 
                           key={pilot.id} 
-                          className="bg-white rounded-lg border border-slate-200 shadow-sm hover:shadow-md transition-shadow overflow-hidden"
+                          className="bg-white rounded-xl border border-slate-200 shadow-md overflow-hidden cursor-pointer"
+                          onClick={() => {
+                            // Only open dialog on desktop/tablet
+                            if (window.innerWidth >= 768) {
+                              setSelectedPilotForDetails(pilot);
+                            }
+                          }}
                         >
+                          {/* Decorative accent */}
+                          <div className="h-1 bg-gradient-to-r from-blue-500 to-emerald-500" />
+                          
                           {/* Header */}
-                          <div className="bg-slate-50 px-4 py-3 border-b border-slate-200">
+                          <div className="bg-gradient-to-r from-slate-50 to-white px-4 py-3 border-b border-slate-200">
                             <div className="flex items-center gap-2">
                               <Users className="h-5 w-5 text-slate-600" />
                               <span className="text-lg font-bold text-slate-900">{pilot.name}</span>
@@ -1235,31 +1246,48 @@ function Statistics({ socket, wsConnected, authenticatedChannel }: StatisticsPro
                                 </div>
                               </div>
                               <div className="text-center">
-                                <div className="text-2xl sm:text-3xl font-bold text-slate-700 whitespace-nowrap">
+                                <div className="text-xl sm:text-2xl font-bold text-slate-700">
                                   {formatTime(pilot.flightHours, pilot.flightMinutes)}
                                 </div>
                                 <div className="text-sm font-medium text-slate-600 uppercase tracking-wide">Tid</div>
                               </div>
                             </div>
 
-                            {/* Start breakdown */}
-                            {(pilot.instructorFlights > 0 || pilot.soloFlights > 0) && (
+                            {/* Start breakdown - only show categories with actual flights */}
+                            {(pilot.instructorFlights > 0 || pilot.soloFlights > 0 || pilot.studentFlights > 0) && (
                               <div className="bg-slate-50 rounded-lg p-3">
                                 <div className="text-xs font-medium text-slate-500 uppercase tracking-wide mb-2">Start fordeling</div>
-                                <div className="grid grid-cols-2 gap-3">
-                                  <div className="text-center">
-                                    <div className="text-lg font-bold text-emerald-600">{pilot.instructorFlights}</div>
-                                    <div className="text-xs text-emerald-600 font-medium">Instruktør</div>
-                                  </div>
-                                  <div className="text-center">
-                                    <div className="text-lg font-bold text-blue-600">{pilot.soloFlights}</div>
-                                    <div className="text-xs text-blue-600 font-medium">Alene</div>
-                                  </div>
+                                <div className={`grid gap-2 ${
+                                  // Determine grid columns based on how many categories have values
+                                  [pilot.instructorFlights > 0, pilot.soloFlights > 0, pilot.studentFlights > 0].filter(Boolean).length === 3 
+                                    ? 'grid-cols-3' 
+                                    : [pilot.instructorFlights > 0, pilot.soloFlights > 0, pilot.studentFlights > 0].filter(Boolean).length === 2
+                                    ? 'grid-cols-2'
+                                    : 'grid-cols-1'
+                                }`}>
+                                  {pilot.instructorFlights > 0 && (
+                                    <div className="text-center">
+                                      <div className="text-lg font-bold text-emerald-600">{pilot.instructorFlights}</div>
+                                      <div className="text-xs text-emerald-600 font-medium">Instruktør</div>
+                                    </div>
+                                  )}
+                                  {pilot.soloFlights > 0 && (
+                                    <div className="text-center">
+                                      <div className="text-lg font-bold text-blue-600">{pilot.soloFlights}</div>
+                                      <div className="text-xs text-blue-600 font-medium">Alene</div>
+                                    </div>
+                                  )}
+                                  {pilot.studentFlights > 0 && (
+                                    <div className="text-center">
+                                      <div className="text-lg font-bold text-amber-600">{pilot.studentFlights}</div>
+                                      <div className="text-xs text-amber-600 font-medium">Elev</div>
+                                    </div>
+                                  )}
                                 </div>
                               </div>
                             )}
 
-                            {/* Flight time breakdown */}
+                            {/* Flight time breakdown - only show if both categories exist */}
                             {pilot.instructorTimeMinutes > 0 && pilot.normalTimeMinutes > 0 && (
                               <div className="bg-slate-50 rounded-lg p-3">
                                 <div className="text-xs font-medium text-slate-500 uppercase tracking-wide mb-2">Flyvetid fordeling</div>
@@ -1270,7 +1298,7 @@ function Statistics({ socket, wsConnected, authenticatedChannel }: StatisticsPro
                                   </div>
                                   <div className="text-center">
                                     <div className="text-lg font-bold text-blue-600">{pilot.normalTime}</div>
-                                    <div className="text-xs text-blue-600 font-medium">Alene</div>
+                                    <div className="text-xs text-blue-600 font-medium">Normal</div>
                                   </div>
                                 </div>
                               </div>
@@ -1332,7 +1360,13 @@ function Statistics({ socket, wsConnected, authenticatedChannel }: StatisticsPro
                                 {getFilteredSortedPilots(currentStats.pilots).map((pilot, index) => (
                                   <tr 
                                     key={pilot.id} 
-                                    className={`border-b border-slate-200 ${index % 2 === 0 ? "" : "bg-slate-50"}`}
+                                    className={`border-b border-slate-200 cursor-pointer hover:bg-slate-100 transition-colors ${index % 2 === 0 ? "" : "bg-slate-50"}`}
+                                    onClick={() => {
+                                      // Only open dialog on desktop/tablet
+                                      if (window.innerWidth >= 768) {
+                                        setSelectedPilotForDetails(pilot);
+                                      }
+                                    }}
                                   >
                                     <td className="py-3 px-4 font-medium">
                                       {pilot.name}
@@ -1576,6 +1610,22 @@ function Statistics({ socket, wsConnected, authenticatedChannel }: StatisticsPro
           flightLogbookId={selectedFlightForReplay.id}
           aircraftRegistration={selectedFlightForReplay.registration}
           onClose={() => setSelectedFlightForReplay(null)}
+        />
+      )}
+      
+      {/* Pilot Details Dialog */}
+      {selectedPilotForDetails && currentStats && (
+        <PilotDetailsDialog
+          isOpen={!!selectedPilotForDetails}
+          onClose={() => setSelectedPilotForDetails(null)}
+          pilotName={selectedPilotForDetails.name}
+          pilotId={selectedPilotForDetails.id}
+          flights={currentStats.flights}
+          totalFlights={selectedPilotForDetails.flightCount}
+          totalTimeMinutes={selectedPilotForDetails.flightTimeMinutes}
+          instructorFlights={selectedPilotForDetails.instructorFlights}
+          soloFlights={selectedPilotForDetails.soloFlights}
+          studentFlights={selectedPilotForDetails.studentFlights}
         />
       )}
     </div>
