@@ -1,0 +1,27 @@
+[variables]
+CI = 'true'
+NODE_ENV = 'production'
+NPM_CONFIG_PRODUCTION = 'false'
+
+[phases.setup]
+nixPkgs = [
+  'nodejs_18',
+  'npm-9_x',
+  'openssl',
+  'python3',
+  'pkg-config',
+  'gcc'
+]
+nixLibs = ['gcc-unwrapped']
+aptPkgs = ['curl', 'wget']
+
+[phases.install]
+dependsOn = ['setup']
+cmds = ['npm install --force']
+
+[phases.build]
+dependsOn = ['install']
+cmds = ['npx prisma generate && npm run build']
+
+[start]
+cmd = 'npm run start'
