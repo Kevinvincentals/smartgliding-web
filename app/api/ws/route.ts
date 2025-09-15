@@ -538,6 +538,7 @@ export function SOCKET(
               status: 'subscribed'
             }));
 
+
             if ((global as any).planeData && (global as any).planeData.length > 0) {
               client.send(JSON.stringify({
                 type: 'aircraft_data',
@@ -592,15 +593,30 @@ export function SOCKET(
 
           return;
         }
-        
+
+        // Handle ADSB preference setting
+        if (data.type === 'set_adsb_preference' && typeof data.wants_adsb === 'boolean') {
+          // Forward the ADSB preference to the plane tracker
+          if ((global as any).planeTrackerSocket && (global as any).planeTrackerSocket.readyState === WebSocket.OPEN) {
+            (global as any).planeTrackerSocket.send(JSON.stringify({
+              type: 'client_wants_adsb',
+              wants_adsb: data.wants_adsb
+            }));
+          }
+
+          return;
+        }
+
         if (data.type === 'unsubscribe' && data.channel) {
            
           if (data.channel === 'plane-tracker') {
             currentClientInfo.subscribedTopics.delete('plane-tracker');
-            client.send(JSON.stringify({ 
-              type: 'subscription_ack', 
-              topic: 'plane-tracker', 
-              status: 'unsubscribed' 
+
+
+            client.send(JSON.stringify({
+              type: 'subscription_ack',
+              topic: 'plane-tracker',
+              status: 'unsubscribed'
             }));
             manageTrackerConnection();
           } else {

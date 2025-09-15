@@ -327,7 +327,7 @@ export const FlightCard = forwardRef<HTMLDivElement, FlightCardProps>(({
                 {liveTrackingData.ground_speed && (
                   <span className="flex items-center gap-1">
                     <Gauge className="h-3 w-3" />
-                    {Math.round(liveTrackingData.ground_speed * 3.6)}km/h
+                    {Math.round(liveTrackingData.ground_speed)}km/h
                   </span>
                 )}
                 {liveTrackingData.track && (
@@ -594,7 +594,7 @@ export const FlightCard = forwardRef<HTMLDivElement, FlightCardProps>(({
                 {liveTrackingData.ground_speed && (
                   <div className="flex items-center gap-1 text-sm font-medium text-green-700">
                     <Gauge className="h-4 w-4" />
-                    <span>{Math.round(liveTrackingData.ground_speed * 3.6)}km/h</span>
+                    <span>{Math.round(liveTrackingData.ground_speed)}km/h</span>
                   </div>
                 )}
                 {liveTrackingData.track && (

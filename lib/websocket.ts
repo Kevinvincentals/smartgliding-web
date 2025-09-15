@@ -250,4 +250,24 @@ export function unsubscribeFromAircraft(socket: WebSocket | null, aircraftIds: s
   } catch (error) {
     console.error('Failed to unsubscribe from aircraft tracking:', error);
   }
-} 
+}
+
+/**
+ * Set ADSB data preference
+ */
+export function setAdsbPreference(socket: WebSocket | null, wantsAdsb: boolean): void {
+  if (!socket || socket.readyState !== WebSocket.OPEN) {
+    console.warn('Cannot set ADSB preference: WebSocket not open');
+    return;
+  }
+
+  try {
+    socket.send(JSON.stringify({
+      type: 'set_adsb_preference',
+      wants_adsb: wantsAdsb
+    }));
+    console.log('Set ADSB preference:', wantsAdsb);
+  } catch (error) {
+    console.error('Failed to set ADSB preference:', error);
+  }
+}

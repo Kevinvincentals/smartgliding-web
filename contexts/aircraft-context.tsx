@@ -2,7 +2,7 @@
 
 import React, { createContext, useState, useContext, useEffect, useCallback, useRef } from "react"
 import { LiveAircraft } from "@/types/live-map"
-import { processAircraftData, subscribePlaneTracker, unsubscribePlaneTracker } from "@/lib/websocket"
+import { processAircraftData, subscribePlaneTracker, unsubscribePlaneTracker, setAdsbPreference } from "@/lib/websocket"
 
 // Define the flight track data interfaces
 interface FlightTrackPoint {
@@ -172,7 +172,14 @@ export function AircraftProvider({
       }
     }
   }, [showAdsb]);
-  
+
+  // Send ADSB preference to backend when it changes
+  useEffect(() => {
+    if (socket && socket.readyState === WebSocket.OPEN) {
+      setAdsbPreference(socket, showAdsb);
+    }
+  }, [socket, showAdsb]);
+
   // Update the ref whenever selectedAircraft changes
   useEffect(() => {
     selectedAircraftRef.current = selectedAircraft;
