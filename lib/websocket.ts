@@ -200,7 +200,7 @@ export function unsubscribePlaneTracker(socket: WebSocket | null): void {
   if (!socket || socket.readyState !== WebSocket.OPEN) {
     return;
   }
-  
+
   try {
     socket.send(JSON.stringify({
       type: 'unsubscribe',
@@ -209,5 +209,45 @@ export function unsubscribePlaneTracker(socket: WebSocket | null): void {
     console.log('Unsubscribed from plane tracker data');
   } catch (error) {
     console.error('Failed to unsubscribe from plane tracker:', error);
+  }
+}
+
+/**
+ * Subscribe to lightweight tracking for specific aircraft
+ */
+export function subscribeToAircraft(socket: WebSocket | null, aircraftIds: string[]): void {
+  if (!socket || socket.readyState !== WebSocket.OPEN) {
+    console.warn('Cannot subscribe to aircraft tracking: WebSocket not open');
+    return;
+  }
+
+  try {
+    socket.send(JSON.stringify({
+      type: 'subscribe_aircraft',
+      aircraft_ids: aircraftIds
+    }));
+    console.log('Subscribed to aircraft tracking:', aircraftIds);
+  } catch (error) {
+    console.error('Failed to subscribe to aircraft tracking:', error);
+  }
+}
+
+/**
+ * Unsubscribe from lightweight tracking for specific aircraft
+ */
+export function unsubscribeFromAircraft(socket: WebSocket | null, aircraftIds: string[]): void {
+  if (!socket || socket.readyState !== WebSocket.OPEN) {
+    console.warn('Cannot unsubscribe from aircraft tracking: WebSocket not open');
+    return;
+  }
+
+  try {
+    socket.send(JSON.stringify({
+      type: 'unsubscribe_aircraft',
+      aircraft_ids: aircraftIds
+    }));
+    console.log('Unsubscribed from aircraft tracking:', aircraftIds);
+  } catch (error) {
+    console.error('Failed to unsubscribe from aircraft tracking:', error);
   }
 } 

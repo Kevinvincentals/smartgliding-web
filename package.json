@@ -46,6 +46,7 @@
     "@types/lodash": "^4.17.16",
     "autoprefixer": "^10.4.20",
     "bcryptjs": "^3.0.2",
+    "bufferutil": "^4.0.9",
     "class-variance-authority": "^0.7.1",
     "clsx": "^2.1.1",
     "cmdk": "1.0.4",
@@ -75,8 +76,9 @@
     "sonner": "^1.7.1",
     "tailwind-merge": "^2.5.5",
     "tailwindcss-animate": "^1.0.7",
+    "utf-8-validate": "^6.0.5",
     "vaul": "^0.9.6",
-    "ws": "^8.18.1",
+    "ws": "^8.18.3",
     "zod": "^3.24.2"
   },
   "devDependencies": {

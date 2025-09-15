@@ -20,6 +20,7 @@ interface ClientInfo {
   subscribedTopics: Set<string>; // e.g., 'plane-tracker'
   clientId: string;
   clubId?: string; // Store clubId from JWT for potential use
+  subscribedAircraft?: string[]; // Store aircraft IDs this client is subscribed to
 }
 
 // FLARM status constants
@@ -43,7 +44,6 @@ declare global {
 // Initialize global stores only if they haven't been initialized yet
 if (!(global as any).wsClients) {
   (global as any).wsClients = new Map<WebSocket, ClientInfo>();
-  console.log("Initialized global WebSocket clients store (with ClientInfo for JWT auth)");
 }
 if (!(global as any).planeData) {
   (global as any).planeData = [];
@@ -69,7 +69,6 @@ async function checkFlarmStatus(flarmId: string): Promise<'online' | 'offline'> 
   const now = Date.now();
   
   if (cached && (now - cached.timestamp) < FLARM_CACHE_TTL) {
-    console.log(`Using cached FLARM status for ${flarmId}: ${cached.status}`);
     return cached.status;
   }
   
@@ -86,14 +85,12 @@ async function checkFlarmStatus(flarmId: string): Promise<'online' | 'offline'> 
     let status: 'online' | 'offline';
     
     if (!latestFlarmData) {
-      console.log(`No FLARM data found for ${flarmId}`);
       status = 'offline';
     } else {
       const flarmTimestamp = new Date(latestFlarmData.mongodb_timestamp).getTime();
       const timeDiff = now - flarmTimestamp;
-      
+
       status = timeDiff < FLARM_OFFLINE_THRESHOLD ? 'online' : 'offline';
-      console.log(`FLARM ${flarmId} last seen ${timeDiff / 60000} minutes ago, status: ${status}`);
     }
     
     (global as any).flarmStatusCache?.set(flarmId, { status, timestamp: now });
@@ -113,32 +110,67 @@ function connectToPlaneTracker() {
   }
 
   if ((global as any).planeTrackerSocket && (global as any).planeTrackerSocket.readyState === WebSocket.OPEN) {
-    console.log('Already connected to plane tracker');
     return;
   }
 
-  console.log(`Connecting to plane tracker WebSocket at ${PLANE_TRACKER_WS_URL}...`);
+  if ((global as any).planeTrackerSocket && (global as any).planeTrackerSocket.readyState === WebSocket.CONNECTING) {
+    return;
+  }
   try {
     const socket = new WebSocket(PLANE_TRACKER_WS_URL);
+    // Set the global reference immediately to prevent duplicate connections
+    (global as any).planeTrackerSocket = socket;
 
     socket.on('open', () => {
-      console.log(`✅ Successfully connected to plane tracker WebSocket server at ${PLANE_TRACKER_WS_URL}`);
       (global as any).planeTrackerSocket = socket;
+
+      // Send any pending aircraft subscriptions
+      const allPendingAircraft: string[] = [];
+      (global as any).wsClients?.forEach((clientInfo: ClientInfo) => {
+        if (clientInfo.isAuthenticated && clientInfo.subscribedTopics.has('tracked_aircraft') && clientInfo.subscribedAircraft) {
+          allPendingAircraft.push(...clientInfo.subscribedAircraft);
+        }
+      });
+
+      // Forward all pending aircraft subscriptions to Python
+      if (allPendingAircraft.length > 0) {
+        setTimeout(() => {
+          const uniqueAircraftIds = [...new Set(allPendingAircraft)];
+          const subscriptionMessage = JSON.stringify({
+            type: 'subscribe_aircraft',
+            aircraft_ids: uniqueAircraftIds
+          });
+          socket.send(subscriptionMessage);
+        }, 100); // Small delay to ensure Python is ready
+      }
+
+      // Notify all tracked_aircraft subscribers that they can re-send subscriptions
+      (global as any).wsClients?.forEach((clientInfo: ClientInfo, client: WebSocket) => {
+        if (clientInfo.isAuthenticated && clientInfo.subscribedTopics.has('tracked_aircraft')) {
+          if (client.readyState === WebSocket.OPEN) {
+            try {
+              client.send(JSON.stringify({
+                type: 'plane_tracker_ready'
+              }));
+            } catch (error) {
+              console.error('Error notifying client of plane tracker ready:', error);
+            }
+          }
+        }
+      });
     });
 
     socket.on('message', (data) => {
-      console.log(`📊 Received from plane tracker: ${data.toString().substring(0, 100)}...`);
       try {
         if (!(global as any).planeData) {
           (global as any).planeData = [];
         }
-        
+
         if (data.toString().startsWith('{')) {
           const jsonData = JSON.parse(data.toString());
-          
+
           if (jsonData.type === 'aircraft_data' && Array.isArray(jsonData.data)) {
             (global as any).planeData = jsonData.data;
-            console.log(`Received ${jsonData.data.length} aircraft from plane tracker`);
           } else if (jsonData.type === 'adsb_aircraft_data' && Array.isArray(jsonData.data)) {
             // Handle ADSB aircraft data - merge with existing plane data
             if (!(global as any).planeData) {
@@ -153,7 +185,6 @@ function connectToPlaneTracker() {
                 (global as any).planeData.push(adsbAircraft);
               }
             });
-            console.log(`Received ${jsonData.data.length} ADSB aircraft from plane tracker`);
           } else if (jsonData.type === 'aircraft_update' && jsonData.data) {
             const aircraftId = jsonData.data.id;
             const existingIndex = (global as any).planeData.findIndex((a: any) => a.id === aircraftId);
@@ -176,25 +207,29 @@ function connectToPlaneTracker() {
           } else if (jsonData.type === 'adsb_aircraft_removed' && jsonData.data && (jsonData.data.id || jsonData.data.aircraft_id)) {
             const aircraftId = jsonData.data.aircraft_id || jsonData.data.id;
             (global as any).planeData = (global as any).planeData.filter((a: any) => a.id !== aircraftId && a.aircraft_id !== aircraftId);
+          } else if (jsonData.type === 'tracked_aircraft_update') {
+            // Forward tracked aircraft updates to clients that have subscribed to aircraft tracking
+            broadcastTrackedAircraftUpdate(jsonData);
+            // Don't broadcast this to all plane-tracker subscribers
+            return;
+          } else if (jsonData.type === 'subscription_confirmed' || jsonData.type === 'unsubscription_confirmed') {
+            // Forward subscription confirmations to the client
+            broadcastTrackedAircraftUpdate(jsonData);
+            return;
           }
         }
-        
+
         broadcastDataToSubscribedPlaneTrackers(data.toString());
       } catch (e) {
-        console.log(`💓 Heartbeat from plane tracker: ${data.toString()}`);
         broadcastDataToSubscribedPlaneTrackers(data.toString());
       }
     });
 
     socket.on('close', (code, reason) => {
-      console.log(`❌ Disconnected from plane tracker WebSocket server (code: ${code}, reason: ${reason || 'unknown'})`);
       (global as any).planeTrackerSocket = null;
       
       if (countClientsSubscribedToTopic('plane-tracker') > 0) {
-        console.log('⏱️ Scheduling reconnection attempt in 5 seconds...');
         (global as any).planeTrackerConnectTimer = setTimeout(connectToPlaneTracker, 5000);
-      } else {
-        console.log("No clients subscribed to 'plane-tracker', not reconnecting");
       }
     });
 
@@ -206,7 +241,6 @@ function connectToPlaneTracker() {
   } catch (error) {
     console.error('🔴 Failed to connect to plane tracker:', error);
     if (countClientsSubscribedToTopic('plane-tracker') > 0) {
-      console.log('⏱️ Scheduling reconnection attempt in 5 seconds...');
       (global as any).planeTrackerConnectTimer = setTimeout(connectToPlaneTracker, 5000);
     }
   }
@@ -215,7 +249,6 @@ function connectToPlaneTracker() {
 function disconnectFromPlaneTracker() {
   if (!(global as any).planeTrackerSocket) return;
 
-  console.log("Disconnecting from plane tracker (no clients subscribed to 'plane-tracker')");
   
   try {
     (global as any).planeTrackerSocket.close();
@@ -232,9 +265,11 @@ function disconnectFromPlaneTracker() {
 
 function manageTrackerConnection() {
   const planeTrackerSubscribersCount = countClientsSubscribedToTopic('plane-tracker');
-  console.log(`Managing plane tracker connection. Active plane tracker subscribers: ${planeTrackerSubscribersCount}`);
-  
-  if (planeTrackerSubscribersCount > 0) {
+  const trackedAircraftSubscribersCount = countClientsSubscribedToTopic('tracked_aircraft');
+  const totalSubscribers = planeTrackerSubscribersCount + trackedAircraftSubscribersCount;
+
+
+  if (totalSubscribers > 0) {
     if (!(global as any).planeTrackerSocket || (global as any).planeTrackerSocket.readyState !== WebSocket.OPEN) {
       connectToPlaneTracker();
     }
@@ -245,15 +280,15 @@ function manageTrackerConnection() {
 
 function broadcastDataToSubscribedPlaneTrackers(message: string | object) {
   const messageString = typeof message === 'string' ? message : JSON.stringify(message);
-  
+
   if (!(global as any).wsClients?.size) {
     return;
   }
-  
+
   let activeClientCount = 0;
   let failedClientCount = 0;
   const clientsToRemove: WebSocket[] = [];
-  
+
   (global as any).wsClients.forEach((clientInfo: ClientInfo, client: WebSocket) => {
     if (clientInfo.isAuthenticated && clientInfo.subscribedTopics.has('plane-tracker')) {
       if (client.readyState === WebSocket.OPEN) {
@@ -270,22 +305,58 @@ function broadcastDataToSubscribedPlaneTrackers(message: string | object) {
       }
     }
   });
-  
+
   clientsToRemove.forEach(client => {
     if ((global as any).wsClients?.has(client)) {
       const clientInfo = (global as any).wsClients.get(client);
-      console.log(`Cleaning up disconnected/failed plane-tracker client: ${clientInfo?.clientId}`);
       (global as any).wsClients.delete(client);
     }
   });
-  
+
   if (clientsToRemove.length > 0) {
-    console.log(`Cleaned up ${clientsToRemove.length} plane-tracker clients. Remaining total: ${(global as any).wsClients?.size}`);
     manageTrackerConnection();
   }
-  
+
   if (activeClientCount > 0) {
-    console.log(`Broadcasted plane data to ${activeClientCount} subscribed clients (failed: ${failedClientCount})`);
+  }
+}
+
+function broadcastTrackedAircraftUpdate(message: any) {
+  const messageString = JSON.stringify(message);
+
+  if (!(global as any).wsClients?.size) {
+    return;
+  }
+
+  let activeClientCount = 0;
+  let failedClientCount = 0;
+  const clientsToRemove: WebSocket[] = [];
+
+  (global as any).wsClients.forEach((clientInfo: ClientInfo, client: WebSocket) => {
+    if (clientInfo.isAuthenticated && clientInfo.subscribedTopics.has('tracked_aircraft')) {
+      if (client.readyState === WebSocket.OPEN) {
+        try {
+          client.send(messageString);
+          activeClientCount++;
+        } catch (error) {
+          console.error('Error sending tracked aircraft data to client:', error);
+          failedClientCount++;
+          clientsToRemove.push(client);
+        }
+      } else if (client.readyState !== WebSocket.CONNECTING) {
+        clientsToRemove.push(client);
+      }
+    }
+  });
+
+  clientsToRemove.forEach(client => {
+    if ((global as any).wsClients?.has(client)) {
+      const clientInfo = (global as any).wsClients.get(client);
+      (global as any).wsClients.delete(client);
+    }
+  });
+
+  if (activeClientCount > 0) {
   }
 }
 
@@ -322,13 +393,11 @@ function broadcastDataToSubscribedPlaneTrackers(message: string | object) {
 //   clientsToRemove.forEach(client => {
 //      if (global.wsClients?.has(client)) {
 //       const clientInfo = global.wsClients.get(client);
-//       console.log(`Cleaning up disconnected/failed client ${clientInfo?.clientId} from channel ${channel} broadcast`);
 //       global.wsClients.delete(client);
 //     }
 //   });
 //
 //   if (activeClientCount > 0) {
-//     console.log(`Broadcasted message to ${activeClientCount} clients on channel ${channel}`);
 //   }
 // }
 
@@ -345,10 +414,8 @@ export function SOCKET(
     const clientId = `${request.socket.remoteAddress}:${request.socket.remotePort}`;
     
     if ((global as any).wsClients?.has(client)) {
-      console.log(`Client ${clientId} already connected, this might be a bug or HMR artifact. Overwriting.`);
     }
     
-    console.log(`Client ${clientId} connecting...`);
     
     const clientInfo: ClientInfo = {
       isAuthenticated: false,
@@ -358,7 +425,6 @@ export function SOCKET(
       clubId: undefined,
     };
     (global as any).wsClients?.set(client, clientInfo);
-    console.log(`Client ${clientId} added to registry. Total clients: ${(global as any).wsClients?.size}.`);
     
     let authenticatedViaCookie = false;
     const cookieHeader = request.headers.cookie;
@@ -368,7 +434,6 @@ export function SOCKET(
       const token = cookies[accessTokenCookieName];
 
       if (token) {
-        console.log(`Client ${clientId} attempting JWT authentication via cookie.`);
         verifyToken(token).then(decodedPayload => {
           if (!decodedPayload.id || (!decodedPayload.selectedAirfield && !decodedPayload.homefield)) {
             console.warn(`Client ${clientId} cookie JWT auth failed: token missing id or airfield. Payload:`, decodedPayload);
@@ -382,7 +447,6 @@ export function SOCKET(
           clientInfo.mainChannel = decodedPayload.selectedAirfield || decodedPayload.homefield || null;
           clientInfo.clubId = decodedPayload.id;
           authenticatedViaCookie = true;
-          console.log(`Client ${clientId} authenticated via cookie. Club ID: ${clientInfo.clubId}, Channel: ${clientInfo.mainChannel}`);
           if (client.readyState === WebSocket.OPEN) {
             client.send(JSON.stringify({ 
               type: 'auth_success', 
@@ -398,15 +462,12 @@ export function SOCKET(
           }
         });
       } else {
-        console.log(`Client ${clientId}: No access token cookie ('${accessTokenCookieName}') found.`);
       }
     } else {
-      console.log(`Client ${clientId}: No cookies found in handshake request.`);
     }
 
     setTimeout(() => {
       if (!clientInfo.isAuthenticated && client.readyState === WebSocket.OPEN) {
-        console.log(`Client ${clientId} not authenticated via cookie, sending auth_required.`);
         client.send(JSON.stringify({ type: 'auth_required', message: 'Authentication via cookie failed or not attempted. Please ensure you are logged in.' }));
       }
     }, 1000);
@@ -415,9 +476,7 @@ export function SOCKET(
       const currentClientInfo = (global as any).wsClients?.get(client);
       if (currentClientInfo) {
         (global as any).wsClients?.delete(client);
-        console.log(`Client ${currentClientInfo.clientId} disconnected (code: ${code}, reason: ${reason || 'none'}). Authenticated: ${currentClientInfo.isAuthenticated}, Channel: ${currentClientInfo.mainChannel}. Remaining clients: ${(global as any).wsClients?.size}`);
       } else {
-        console.log(`Unknown client disconnected (code: ${code}, reason: ${reason || 'none'}). Remaining clients: ${(global as any).wsClients?.size}`);
       }
       
       manageTrackerConnection();
@@ -437,7 +496,6 @@ export function SOCKET(
         const data = JSON.parse(msgStr);
         
         if (!currentClientInfo.isAuthenticated) {
-          console.log(`Client ${currentClientInfo.clientId} sent message type '${data.type}' before authenticating. Message ignored: ${msgStr.substring(0,100)}`);
           if (!authenticatedViaCookie) {
              client.send(JSON.stringify({ type: 'error', message: 'Authentication required. Please ensure cookies are enabled and you are logged in.' }));
           }
@@ -450,14 +508,12 @@ export function SOCKET(
         }
         
         if (data.type === 'flarm_status_request' && data.flarmId) {
-          console.log(`Client ${currentClientInfo.clientId} requested FLARM status for ${data.flarmId}`);
           const status = await checkFlarmStatus(data.flarmId);
           sendFlarmStatusToClient(client, data.flarmId, status);
           return;
         }
         
         if (data.type === 'flarm_status_batch_request' && Array.isArray(data.flarmIds)) {
-          console.log(`Client ${currentClientInfo.clientId} requested batch FLARM status for ${data.flarmIds.length} IDs`);
           const responses = await Promise.all(
             data.flarmIds.map(async (flarmId: string) => {
               const status = await checkFlarmStatus(flarmId);
@@ -473,41 +529,74 @@ export function SOCKET(
         }
         
         if (data.type === 'subscribe' && data.channel) {
-          console.log(`Client ${currentClientInfo.clientId} attempting to subscribe to topic: ${data.channel}`);
-          
+
           if (data.channel === 'plane-tracker') {
             currentClientInfo.subscribedTopics.add('plane-tracker');
-            console.log(`Client ${currentClientInfo.clientId} subscribed to plane tracker data. Main channel: ${currentClientInfo.mainChannel}`);
-            client.send(JSON.stringify({ 
-              type: 'subscription_ack', 
-              topic: 'plane-tracker', 
-              status: 'subscribed' 
+            client.send(JSON.stringify({
+              type: 'subscription_ack',
+              topic: 'plane-tracker',
+              status: 'subscribed'
             }));
-            
+
             if ((global as any).planeData && (global as any).planeData.length > 0) {
-              client.send(JSON.stringify({ 
-                type: 'aircraft_data', 
-                data: (global as any).planeData 
+              client.send(JSON.stringify({
+                type: 'aircraft_data',
+                data: (global as any).planeData
               }));
             }
             manageTrackerConnection();
           } else {
-            console.log(`Client ${currentClientInfo.clientId} tried to subscribe to unhandled topic: ${data.channel}`);
-             client.send(JSON.stringify({ 
+             client.send(JSON.stringify({
               type: 'subscription_nak',
-              topic: data.channel, 
-              status: 'topic_not_available' 
+              topic: data.channel,
+              status: 'topic_not_available'
             }));
           }
           return;
         }
+
+        // Handle aircraft tracking subscription
+        if (data.type === 'subscribe_aircraft' && data.aircraft_ids) {
+          // Track which aircraft this client is subscribed to
+          if (!currentClientInfo.subscribedTopics.has('tracked_aircraft')) {
+            currentClientInfo.subscribedTopics.add('tracked_aircraft');
+          }
+
+          // Store the aircraft subscription for this client
+          currentClientInfo.subscribedAircraft = data.aircraft_ids;
+
+          // Ensure plane tracker connection is active
+          manageTrackerConnection();
+
+          // Forward the subscription to the plane tracker
+          if ((global as any).planeTrackerSocket && (global as any).planeTrackerSocket.readyState === WebSocket.OPEN) {
+            const subscriptionMessage = JSON.stringify({
+              type: 'subscribe_aircraft',
+              aircraft_ids: data.aircraft_ids
+            });
+            (global as any).planeTrackerSocket.send(subscriptionMessage);
+          }
+
+          return;
+        }
+
+        // Handle aircraft tracking unsubscription
+        if (data.type === 'unsubscribe_aircraft' && data.aircraft_ids) {
+          // Forward the unsubscription to the plane tracker
+          if ((global as any).planeTrackerSocket && (global as any).planeTrackerSocket.readyState === WebSocket.OPEN) {
+            (global as any).planeTrackerSocket.send(JSON.stringify({
+              type: 'unsubscribe_aircraft',
+              aircraft_ids: data.aircraft_ids
+            }));
+          }
+
+          return;
+        }
         
         if (data.type === 'unsubscribe' && data.channel) {
-           console.log(`Client ${currentClientInfo.clientId} attempting to unsubscribe from topic: ${data.channel}`);
            
           if (data.channel === 'plane-tracker') {
             currentClientInfo.subscribedTopics.delete('plane-tracker');
-            console.log(`Client ${currentClientInfo.clientId} unsubscribed from plane tracker data.`);
             client.send(JSON.stringify({ 
               type: 'subscription_ack', 
               topic: 'plane-tracker', 
@@ -515,7 +604,6 @@ export function SOCKET(
             }));
             manageTrackerConnection();
           } else {
-            console.log(`Client ${currentClientInfo.clientId} tried to unsubscribe from unhandled topic: ${data.channel}`);
             client.send(JSON.stringify({ 
               type: 'subscription_nak',
               topic: data.channel, 
@@ -526,13 +614,11 @@ export function SOCKET(
         }
         
         if (data.type === 'disconnect') {
-          console.log(`Client ${currentClientInfo.clientId} sent explicit disconnect: ${data.message || 'No reason provided'}`);
           client.send(JSON.stringify({ type: 'disconnect_ack' }));
           client.close(); 
           return;
         }
         
-        console.log(`Client ${currentClientInfo.clientId} (Channel: ${currentClientInfo.mainChannel}) sent message: ${msgStr.substring(0, 100)}`);
         
         if (data.type === 'echo') {
           client.send(msgStr);
@@ -542,7 +628,6 @@ export function SOCKET(
         }
       } catch (e) {
         const clientDetail = currentClientInfo ? `Client ${currentClientInfo.clientId} (Channel: ${currentClientInfo.mainChannel})` : `Client ${clientId}`;
-        console.log(`${clientDetail} sent non-JSON or unparsable message: ${msgStr.substring(0, 100)}. Error: ${e}`);
         client.send(JSON.stringify({ type: 'error', message: 'Invalid message format or server processing error.' }));
       }
     });

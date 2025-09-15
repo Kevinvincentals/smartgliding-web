@@ -4,7 +4,7 @@ import { Card } from "@/components/ui/card"
 import { Badge } from "@/components/ui/badge"
 import { Button } from "@/components/ui/button"
 import { Tooltip, TooltipContent, TooltipTrigger, TooltipProvider } from "@/components/ui/tooltip"
-import { Clock, GraduationCap, MapPin, PlaneLanding, PlaneTakeoff, Users, Trash, Copy, User, FileText, RotateCcw, Building } from "lucide-react"
+import { Clock, GraduationCap, MapPin, PlaneLanding, PlaneTakeoff, Users, Trash, Copy, User, FileText, RotateCcw, Building, Mountain, Gauge, Compass } from "lucide-react"
 import Image from "next/image"
 import { forwardRef, useState, useEffect } from "react"
 import type { Flight } from "@/types/flight"
@@ -41,6 +41,14 @@ interface FlightCardProps {
   currentClubId?: string
   currentClubHomefield?: string
   currentAirfield?: string
+  liveTrackingData?: {
+    altitude?: number
+    ground_speed?: number
+    track?: number
+    climb_rate?: number
+    vertical_rate?: number
+    lastUpdate?: number
+  } | null
 }
 
 export const FlightCard = forwardRef<HTMLDivElement, FlightCardProps>(({
@@ -61,7 +69,8 @@ export const FlightCard = forwardRef<HTMLDivElement, FlightCardProps>(({
   isDuplicating = false,
   currentClubId,
   currentClubHomefield,
-  currentAirfield
+  currentAirfield,
+  liveTrackingData = null
 }, ref) => {
   // Add animation state for visual highlighting
   const [highlight, setHighlight] = useState(false);
@@ -304,9 +313,31 @@ export const FlightCard = forwardRef<HTMLDivElement, FlightCardProps>(({
             </button>
           </div>
 
-          {/* Duration column */}
+          {/* Duration column with live tracking data */}
           <div className={`${textSizeClass} font-bold`}>
-            {getFlightDuration(flight.startTime, flight.endTime)}
+            <div>{getFlightDuration(flight.startTime, flight.endTime)}</div>
+            {liveTrackingData && flight.status === 'in_flight' && (
+              <div className="text-xs text-green-600 mt-1 flex items-center gap-2">
+                {liveTrackingData.altitude && (
+                  <span className="flex items-center gap-1">
+                    <Mountain className="h-3 w-3" />
+                    {Math.round(liveTrackingData.altitude)}m
+                  </span>
+                )}
+                {liveTrackingData.ground_speed && (
+                  <span className="flex items-center gap-1">
+                    <Gauge className="h-3 w-3" />
+                    {Math.round(liveTrackingData.ground_speed * 3.6)}km/h
+                  </span>
+                )}
+                {liveTrackingData.track && (
+                  <span className="flex items-center gap-1">
+                    <Compass className="h-3 w-3" />
+                    {Math.round(liveTrackingData.track)}°
+                  </span>
+                )}
+              </div>
+            )}
           </div>
 
           {/* Status/Action column - combined in a creative way */}
@@ -550,6 +581,31 @@ export const FlightCard = forwardRef<HTMLDivElement, FlightCardProps>(({
                 )}
               </div>
             </div>
+
+            {/* Live tracking data for card view */}
+            {liveTrackingData && flight.status === 'in_flight' && (
+              <div className="flex items-center justify-center gap-4 p-2 bg-green-50 rounded-lg border border-green-200">
+                {liveTrackingData.altitude && (
+                  <div className="flex items-center gap-1 text-sm font-medium text-green-700">
+                    <Mountain className="h-4 w-4" />
+                    <span>{Math.round(liveTrackingData.altitude)}m</span>
+                  </div>
+                )}
+                {liveTrackingData.ground_speed && (
+                  <div className="flex items-center gap-1 text-sm font-medium text-green-700">
+                    <Gauge className="h-4 w-4" />
+                    <span>{Math.round(liveTrackingData.ground_speed * 3.6)}km/h</span>
+                  </div>
+                )}
+                {liveTrackingData.track && (
+                  <div className="flex items-center gap-1 text-sm font-medium text-green-700">
+                    <Compass className="h-4 w-4" />
+                    <span>{Math.round(liveTrackingData.track)}°</span>
+                  </div>
+                )}
+              </div>
+            )}
+
 
             {/* Status button */}
             <button 

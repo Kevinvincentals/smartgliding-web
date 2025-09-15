@@ -18,6 +18,7 @@ import { toast as hotToast } from 'react-hot-toast'
 import dynamic from "next/dynamic"
 import { StartlisteHeader } from "./components/header"
 import { useStartliste } from "@/contexts/startlist-context"
+import { subscribeToAircraft, unsubscribeFromAircraft } from "@/lib/websocket"
 
 // Dynamically import StatisticsReplayMap with SSR turned off
 const StatisticsReplayMap = dynamic(() => 
@@ -45,6 +46,7 @@ interface WebSocketMessage {
   status?: FlarmStatus;
   statuses?: Array<{ flarmId: string; status: FlarmStatus }>;
   timestamp?: number;
+  aircraft_ids?: string[];
 }
 
 // Add interface for props
@@ -74,6 +76,10 @@ function StartList({ socket, wsConnected, dailyInfo, authenticatedChannel, airfi
 
   // Add state for API flights
   const [apiFlights, setApiFlights] = useState<any[]>([])
+
+  // Add state for live aircraft tracking
+  const [trackedAircraftData, setTrackedAircraftData] = useState<Record<string, any>>({})
+  const [subscribedAircraft, setSubscribedAircraft] = useState<Set<string>>(new Set())
 
   // Display settings state
   const [hideCompleted, setHideCompleted] = useState(false)
@@ -368,16 +374,16 @@ function StartList({ socket, wsConnected, dailyInfo, authenticatedChannel, airfi
         clearInterval(flarmStatusIntervalRef.current);
         flarmStatusIntervalRef.current = null;
       }
-      
+
       // Initial request
       requestFlarmStatuses();
-      
+
       // Set up polling every 10 minutes (instead of every minute)
       flarmStatusIntervalRef.current = setInterval(() => {
         requestFlarmStatuses();
       }, 600000); // 10 minutes
     }
-    
+
     // Cleanup on unmount or when socket changes
     return () => {
       if (flarmStatusIntervalRef.current) {
@@ -386,6 +392,43 @@ function StartList({ socket, wsConnected, dailyInfo, authenticatedChannel, airfi
       }
     };
   }, [socket, wsConnected]); // Remove flights dependency to prevent double requests
+
+  // Subscribe to aircraft tracking for flights that are currently in flight
+  useEffect(() => {
+    if (!socket || !wsConnected) return;
+
+    // Find flights that are currently in flight and have FLARM IDs
+    const inFlightAircraft = flights
+      .filter(f => f.status === 'in_flight' && f.aircraft.flarmId)
+      .map(f => f.aircraft.flarmId)
+      .filter((id): id is string => !!id);
+
+    // Subscribe to aircraft that aren't already subscribed
+    const newSubscriptions = inFlightAircraft.filter(id => !subscribedAircraft.has(id));
+    if (newSubscriptions.length > 0) {
+      subscribeToAircraft(socket, newSubscriptions);
+      setSubscribedAircraft(prev => new Set([...prev, ...newSubscriptions]));
+    }
+
+    // Unsubscribe from aircraft that are no longer in flight
+    const aircraftToUnsubscribe = Array.from(subscribedAircraft).filter(id =>
+      !inFlightAircraft.includes(id)
+    );
+    if (aircraftToUnsubscribe.length > 0) {
+      unsubscribeFromAircraft(socket, aircraftToUnsubscribe);
+      setSubscribedAircraft(prev => {
+        const newSet = new Set(prev);
+        aircraftToUnsubscribe.forEach(id => newSet.delete(id));
+        return newSet;
+      });
+      // Clean up tracked data
+      setTrackedAircraftData(prev => {
+        const newData = { ...prev };
+        aircraftToUnsubscribe.forEach(id => delete newData[id]);
+        return newData;
+      });
+    }
+  }, [socket, wsConnected, flights, subscribedAircraft]);
 
   // Handle FLARM status updates
   const handleFlarmStatus = (flarmId: string, status: FlarmStatus) => {
@@ -405,11 +448,43 @@ function StartList({ socket, wsConnected, dailyInfo, authenticatedChannel, airfi
         newStatuses[flarmId] = status;
       }
     });
-    
+
     setFlarmStatuses(prev => ({
       ...prev,
       ...newStatuses
     }));
+  };
+
+  // Subscribe to aircraft tracking when takeoff occurs
+  const subscribeToAircraftTracking = (flight: Flight) => {
+    if (!socket || !flight.aircraft.flarmId) return;
+
+    const aircraftId = flight.aircraft.flarmId;
+    if (!subscribedAircraft.has(aircraftId)) {
+      subscribeToAircraft(socket, [aircraftId]);
+      setSubscribedAircraft(prev => new Set([...prev, aircraftId]));
+    }
+  };
+
+  // Unsubscribe from aircraft tracking when landing occurs
+  const unsubscribeFromAircraftTracking = (flight: Flight) => {
+    if (!socket || !flight.aircraft.flarmId) return;
+
+    const aircraftId = flight.aircraft.flarmId;
+    if (subscribedAircraft.has(aircraftId)) {
+      unsubscribeFromAircraft(socket, [aircraftId]);
+      setSubscribedAircraft(prev => {
+        const newSet = new Set(prev);
+        newSet.delete(aircraftId);
+        return newSet;
+      });
+      // Clean up tracked data
+      setTrackedAircraftData(prev => {
+        const newData = { ...prev };
+        delete newData[aircraftId];
+        return newData;
+      });
+    }
   };
 
   // Handle flight creation
@@ -579,8 +654,21 @@ function StartList({ socket, wsConnected, dailyInfo, authenticatedChannel, airfi
         
         if (existingFlightIndex !== -1) {
           // Update existing flight
+          const existingFlight = prevFlights[existingFlightIndex];
           const updatedFlights = [...prevFlights];
           updatedFlights[existingFlightIndex] = updatedFlight;
+
+          // Handle aircraft tracking subscriptions based on status changes
+          if (existingFlight.status !== updatedFlight.status) {
+            if (updatedFlight.status === 'in_flight' && updatedFlight.aircraft.flarmId) {
+              // Flight took off - subscribe to tracking
+              subscribeToAircraftTracking(updatedFlight);
+            } else if (updatedFlight.status === 'completed' && existingFlight.status === 'in_flight') {
+              // Flight landed - unsubscribe from tracking
+              unsubscribeFromAircraftTracking(existingFlight);
+            }
+          }
+
           return updatedFlights;
         } else {
           // Add new flight only if it doesn't already exist
@@ -593,7 +681,12 @@ function StartList({ socket, wsConnected, dailyInfo, authenticatedChannel, airfi
           if (isDuplicate) {
             return prevFlights; // Don't add duplicate
           }
-          
+
+          // If adding a new flight that's already in flight, subscribe to tracking
+          if (updatedFlight.status === 'in_flight' && updatedFlight.aircraft.flarmId) {
+            subscribeToAircraftTracking(updatedFlight);
+          }
+
           return [...prevFlights, updatedFlight];
         }
       });
@@ -704,7 +797,38 @@ function StartList({ socket, wsConnected, dailyInfo, authenticatedChannel, airfi
           case 'pong':
             // Handle pong silently
             break;
-            
+
+          case 'tracked_aircraft_update':
+            if (data.data && data.data.id) {
+              setTrackedAircraftData(prev => ({
+                ...prev,
+                [data.data.id]: {
+                  ...data.data,
+                  lastUpdate: Date.now()
+                }
+              }));
+            }
+            break;
+
+          case 'subscription_confirmed':
+            if (data.aircraft_ids) {
+              setSubscribedAircraft(new Set(data.aircraft_ids));
+            }
+            break;
+
+          case 'plane_tracker_ready':
+            // Re-subscribe to aircraft that should be tracked
+            const inFlightAircraftIds = flights
+              .filter(f => f.status === 'in_flight' && f.aircraft.flarmId)
+              .map(f => f.aircraft.flarmId)
+              .filter((id): id is string => !!id);
+
+            if (inFlightAircraftIds.length > 0 && socket) {
+              console.log('Plane tracker ready, re-subscribing to aircraft:', inFlightAircraftIds);
+              subscribeToAircraft(socket, inFlightAircraftIds);
+            }
+            break;
+
           default:
             // Silently ignore unhandled message types
         }
@@ -1509,8 +1633,13 @@ function StartList({ socket, wsConnected, dailyInfo, authenticatedChannel, airfi
                   (flight.status === 'in_flight' || flight.status === 'completed');
                 
                 // Get FLARM status if available
-                const flarmStatus = flight.aircraft.hasFlarm && flight.aircraft.flarmId 
+                const flarmStatus = flight.aircraft.hasFlarm && flight.aircraft.flarmId
                   ? flarmStatuses[flight.aircraft.flarmId] || 'unknown'
+                  : null;
+
+                // Get live aircraft tracking data if available
+                const liveTrackingData = flight.aircraft.flarmId && trackedAircraftData[flight.aircraft.flarmId]
+                  ? trackedAircraftData[flight.aircraft.flarmId]
                   : null;
                 
                 return (
@@ -1534,6 +1663,7 @@ function StartList({ socket, wsConnected, dailyInfo, authenticatedChannel, airfi
                     isDuplicating={isDuplicating}
                     currentClubHomefield={dailyInfo?.club?.homefield}
                     currentAirfield={authenticatedChannel || undefined}
+                    liveTrackingData={liveTrackingData}
                   />
                 );
               })}
