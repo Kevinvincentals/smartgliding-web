@@ -82,6 +82,7 @@ export function processAircraftData(data: any): LiveAircraft {
   }
   
   // Handle OGN/FLARM data format (existing logic)
+  // NOTE: FLARM resolution now happens on the server side
   return {
     id: data.id,
     registration: data.registration || `FLARM-${data.id.substring(0, 4)}`,

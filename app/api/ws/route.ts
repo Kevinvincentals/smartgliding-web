@@ -10,6 +10,10 @@ const prisma = new PrismaClient();
 
 // Default plane tracker WebSocket URL for development if not specified in environment
 const PLANE_TRACKER_WS_URL = process.env.PLANE_TRACKER_WS_URL || 'ws://127.0.0.1:8765';
+const DEBUG_WEBSOCKET = process.env.DEBUG_WEBSOCKET === 'true';
+
+// Import the FLARM resolution function
+import { resolveFlarmId } from '@/lib/flarm-resolution';
 
 // AUTH_PASSWORD constant is removed as we are switching to JWT based auth
 
@@ -102,6 +106,85 @@ async function checkFlarmStatus(flarmId: string): Promise<'online' | 'offline'> 
   }
 }
 
+// Process aircraft data with FLARM resolution before broadcasting
+async function processAndBroadcastAircraftData(jsonData: any) {
+  try {
+    // Handle different types of aircraft data
+    if ((jsonData.type === 'aircraft_data' || jsonData.type === 'aircraft_batch_update') && Array.isArray(jsonData.data)) {
+      // Process each aircraft to resolve FLARM IDs
+      const processedAircraft = await Promise.all(jsonData.data.map(async (aircraft: any) => {
+        // If no registration, try to resolve FLARM ID
+        if (!aircraft.registration && aircraft.id) {
+          try {
+            const resolutionResult = await resolveFlarmId(aircraft.id);
+
+            // Update aircraft with resolved registration
+            if (resolutionResult.registration !== `FLARM-${aircraft.id.substring(0, 6)}`) {
+              aircraft.registration = resolutionResult.registration;
+
+              // Also update aircraft type if resolved
+              if (resolutionResult.aircraftType && (!aircraft.aircraft_model || aircraft.aircraft_model === 'Unknown')) {
+                aircraft.aircraft_model = resolutionResult.aircraftType;
+              }
+
+              if (DEBUG_WEBSOCKET && resolutionResult.source === 'club') {
+                console.log(`✅ Resolved FLARM ${aircraft.id} to ${aircraft.registration}`);
+              }
+            }
+          } catch (error) {
+            if (DEBUG_WEBSOCKET) {
+              console.error(`Failed to resolve FLARM ID ${aircraft.id}:`, error);
+            }
+          }
+        }
+        return aircraft;
+      }));
+
+      // Broadcast the processed data
+      const processedMessage = {
+        ...jsonData,
+        data: processedAircraft
+      };
+
+      broadcastDataToSubscribedPlaneTrackers(processedMessage);
+    } else if (jsonData.type === 'aircraft_update' && jsonData.data) {
+      // Process single aircraft update
+      const aircraft = jsonData.data;
+
+      if (!aircraft.registration && aircraft.id) {
+        try {
+          const resolutionResult = await resolveFlarmId(aircraft.id);
+          if (resolutionResult.registration !== `FLARM-${aircraft.id.substring(0, 6)}`) {
+            aircraft.registration = resolutionResult.registration;
+            if (resolutionResult.aircraftType && (!aircraft.aircraft_model || aircraft.aircraft_model === 'Unknown')) {
+              aircraft.aircraft_model = resolutionResult.aircraftType;
+            }
+          }
+        } catch (error) {
+          if (DEBUG_WEBSOCKET) {
+            console.error(`Failed to resolve FLARM ID ${aircraft.id}:`, error);
+          }
+        }
+      }
+
+      // Broadcast the processed data
+      const processedMessage = {
+        ...jsonData,
+        data: aircraft
+      };
+
+      broadcastDataToSubscribedPlaneTrackers(processedMessage);
+    } else {
+      // For other data types (removed, adsb, etc.), broadcast as-is
+      broadcastDataToSubscribedPlaneTrackers(jsonData);
+    }
+  } catch (error) {
+    console.error('Error processing aircraft data:', error);
+    // Fallback: broadcast original data
+    broadcastDataToSubscribedPlaneTrackers(jsonData);
+  }
+}
+
 // Function to connect to the plane tracker WebSocket
 function connectToPlaneTracker() {
   if ((global as any).planeTrackerConnectTimer) {
@@ -117,12 +200,44 @@ function connectToPlaneTracker() {
     return;
   }
   try {
+    if (DEBUG_WEBSOCKET) console.log(`🔌 Connecting to plane tracker WebSocket at: ${PLANE_TRACKER_WS_URL}`);
     const socket = new WebSocket(PLANE_TRACKER_WS_URL);
     // Set the global reference immediately to prevent duplicate connections
     (global as any).planeTrackerSocket = socket;
 
     socket.on('open', () => {
-      (global as any).planeTrackerSocket = socket;
+      if (DEBUG_WEBSOCKET) console.log('✅ Plane tracker WebSocket connected successfully');
+
+      // Subscribe to get all aircraft updates
+      // The plane tracker backend expects specific subscription messages
+      try {
+        // First, subscribe to all OGN/FLARM aircraft updates
+        // The backend checks for wants_all_aircraft flag (line 88 in websocket_server.py)
+        const subscribeMessage = JSON.stringify({
+          type: 'subscribe_all'
+        });
+        socket.send(subscribeMessage);
+        if (DEBUG_WEBSOCKET) console.log('📡 Sent subscribe_all message to plane tracker');
+
+        // Also send ADSB preference if clients want it
+        let wantsAdsb = false;
+        (global as any).wsClients?.forEach((clientInfo: ClientInfo) => {
+          if (clientInfo.subscribedTopics.has('plane-tracker')) {
+            wantsAdsb = true;
+          }
+        });
+
+        if (wantsAdsb) {
+          const adsbMessage = JSON.stringify({
+            type: 'client_wants_adsb',
+            wants_adsb: true
+          });
+          socket.send(adsbMessage);
+          if (DEBUG_WEBSOCKET) console.log('📡 Sent ADSB subscription to plane tracker');
+        }
+      } catch (error) {
+        console.error('Failed to subscribe to plane tracker:', error);
+      }
 
       // Send any pending aircraft subscriptions
       const allPendingAircraft: string[] = [];
@@ -160,8 +275,12 @@ function connectToPlaneTracker() {
       });
     });
 
-    socket.on('message', (data) => {
+    socket.on('message', async (data) => {
       try {
+        if (DEBUG_WEBSOCKET) {
+          console.log(`📥 Received data from plane tracker: ${data.toString().substring(0, 200)}...`);
+        }
+
         if (!(global as any).planeData) {
           (global as any).planeData = [];
         }
@@ -171,6 +290,10 @@ function connectToPlaneTracker() {
 
           if (jsonData.type === 'aircraft_data' && Array.isArray(jsonData.data)) {
             (global as any).planeData = jsonData.data;
+
+            // Process and broadcast aircraft data with FLARM resolution
+            await processAndBroadcastAircraftData(jsonData);
+            return; // Don't double-broadcast
           } else if (jsonData.type === 'adsb_aircraft_data' && Array.isArray(jsonData.data)) {
             // Handle ADSB aircraft data - merge with existing plane data
             if (!(global as any).planeData) {
@@ -185,6 +308,10 @@ function connectToPlaneTracker() {
                 (global as any).planeData.push(adsbAircraft);
               }
             });
+
+            // Broadcast ADSB data as-is (doesn't need FLARM resolution)
+            broadcastDataToSubscribedPlaneTrackers(jsonData);
+            return; // Don't double-broadcast
           } else if (jsonData.type === 'aircraft_update' && jsonData.data) {
             const aircraftId = jsonData.data.id;
             const existingIndex = (global as any).planeData.findIndex((a: any) => a.id === aircraftId);
@@ -193,6 +320,24 @@ function connectToPlaneTracker() {
             } else {
               (global as any).planeData.push(jsonData.data);
             }
+
+            // Process and broadcast single aircraft update with FLARM resolution
+            await processAndBroadcastAircraftData(jsonData);
+            return; // Don't double-broadcast
+          } else if (jsonData.type === 'aircraft_batch_update' && Array.isArray(jsonData.data)) {
+            // Update the global plane data
+            jsonData.data.forEach((aircraft: any) => {
+              const existingIndex = (global as any).planeData.findIndex((a: any) => a.id === aircraft.id);
+              if (existingIndex >= 0) {
+                (global as any).planeData[existingIndex] = aircraft;
+              } else {
+                (global as any).planeData.push(aircraft);
+              }
+            });
+
+            // Process and broadcast batch update with FLARM resolution
+            await processAndBroadcastAircraftData(jsonData);
+            return; // Don't double-broadcast
           } else if (jsonData.type === 'adsb_aircraft_update' && jsonData.data) {
             const aircraftId = jsonData.data.aircraft_id || jsonData.data.id;
             const existingIndex = (global as any).planeData.findIndex((a: any) => a.id === aircraftId || a.aircraft_id === aircraftId);
@@ -201,12 +346,24 @@ function connectToPlaneTracker() {
             } else {
               (global as any).planeData.push(jsonData.data);
             }
+
+            // Broadcast ADSB update as-is
+            broadcastDataToSubscribedPlaneTrackers(jsonData);
+            return; // Don't double-broadcast
           } else if (jsonData.type === 'aircraft_removed' && jsonData.data && jsonData.data.id) {
             const aircraftId = jsonData.data.id;
             (global as any).planeData = (global as any).planeData.filter((a: any) => a.id !== aircraftId);
+
+            // Broadcast removal as-is
+            broadcastDataToSubscribedPlaneTrackers(jsonData);
+            return; // Don't double-broadcast
           } else if (jsonData.type === 'adsb_aircraft_removed' && jsonData.data && (jsonData.data.id || jsonData.data.aircraft_id)) {
             const aircraftId = jsonData.data.aircraft_id || jsonData.data.id;
             (global as any).planeData = (global as any).planeData.filter((a: any) => a.id !== aircraftId && a.aircraft_id !== aircraftId);
+
+            // Broadcast removal as-is
+            broadcastDataToSubscribedPlaneTrackers(jsonData);
+            return; // Don't double-broadcast
           } else if (jsonData.type === 'tracked_aircraft_update') {
             // Forward tracked aircraft updates to clients that have subscribed to aircraft tracking
             broadcastTrackedAircraftUpdate(jsonData);
@@ -216,19 +373,33 @@ function connectToPlaneTracker() {
             // Forward subscription confirmations to the client
             broadcastTrackedAircraftUpdate(jsonData);
             return;
+          } else {
+            // For any other unhandled message types, broadcast as-is
+            broadcastDataToSubscribedPlaneTrackers(jsonData);
           }
+        } else {
+          // Non-JSON data, broadcast as-is
+          broadcastDataToSubscribedPlaneTrackers(data.toString());
         }
-
-        broadcastDataToSubscribedPlaneTrackers(data.toString());
       } catch (e) {
+        console.error('Error processing plane tracker message:', e);
+        // On error, try to broadcast raw data as fallback
         broadcastDataToSubscribedPlaneTrackers(data.toString());
       }
     });
 
     socket.on('close', (code, reason) => {
+      if (DEBUG_WEBSOCKET) console.log(`🔌 Plane tracker WebSocket closed with code ${code}, reason: ${reason}`);
       (global as any).planeTrackerSocket = null;
-      
+
+      // Clear the data request interval
+      if ((global as any).planeTrackerDataInterval) {
+        clearInterval((global as any).planeTrackerDataInterval);
+        (global as any).planeTrackerDataInterval = null;
+      }
+
       if (countClientsSubscribedToTopic('plane-tracker') > 0) {
+        if (DEBUG_WEBSOCKET) console.log('🔄 Reconnecting to plane tracker in 5 seconds...');
         (global as any).planeTrackerConnectTimer = setTimeout(connectToPlaneTracker, 5000);
       }
     });
@@ -249,14 +420,22 @@ function connectToPlaneTracker() {
 function disconnectFromPlaneTracker() {
   if (!(global as any).planeTrackerSocket) return;
 
-  
   try {
-    (global as any).planeTrackerSocket.close();
+    const socket = (global as any).planeTrackerSocket;
+
+    // Only try to close if the socket is in a valid state
+    if (socket.readyState === WebSocket.OPEN || socket.readyState === WebSocket.CONNECTING) {
+      socket.close();
+    }
+
     (global as any).planeTrackerSocket = null;
   } catch (error) {
     console.error('Error disconnecting from plane tracker:', error);
+    // Ensure we still clear the reference even if close() fails
+    (global as any).planeTrackerSocket = null;
   }
-  
+
+
   if ((global as any).planeTrackerConnectTimer) {
     clearTimeout((global as any).planeTrackerConnectTimer);
     (global as any).planeTrackerConnectTimer = null;
@@ -268,12 +447,25 @@ function manageTrackerConnection() {
   const trackedAircraftSubscribersCount = countClientsSubscribedToTopic('tracked_aircraft');
   const totalSubscribers = planeTrackerSubscribersCount + trackedAircraftSubscribersCount;
 
+  if (DEBUG_WEBSOCKET) console.log(`🔍 Managing tracker connection: ${totalSubscribers} total subscribers`);
 
   if (totalSubscribers > 0) {
-    if (!(global as any).planeTrackerSocket || (global as any).planeTrackerSocket.readyState !== WebSocket.OPEN) {
+    const socket = (global as any).planeTrackerSocket;
+
+    if (!socket) {
+      if (DEBUG_WEBSOCKET) console.log('🚀 No socket exists, connecting to plane tracker...');
+      connectToPlaneTracker();
+    } else if (socket.readyState === WebSocket.CONNECTING) {
+      if (DEBUG_WEBSOCKET) console.log('⏳ Socket is already connecting, waiting...');
+      // Don't interrupt a connecting socket
+    } else if (socket.readyState === WebSocket.OPEN) {
+      if (DEBUG_WEBSOCKET) console.log('✅ Socket is already open and ready');
+    } else {
+      if (DEBUG_WEBSOCKET) console.log('🔄 Socket is in invalid state, reconnecting...');
       connectToPlaneTracker();
     }
   } else {
+    if (DEBUG_WEBSOCKET) console.log('🛑 No subscribers, disconnecting from plane tracker...');
     disconnectFromPlaneTracker();
   }
 }
@@ -282,7 +474,21 @@ function broadcastDataToSubscribedPlaneTrackers(message: string | object) {
   const messageString = typeof message === 'string' ? message : JSON.stringify(message);
 
   if (!(global as any).wsClients?.size) {
+    if (DEBUG_WEBSOCKET) console.log('📡 No WebSocket clients connected, skipping broadcast');
     return;
+  }
+
+  // Parse the message to see what type of data we're broadcasting
+  if (DEBUG_WEBSOCKET) {
+    try {
+      const parsedMessage = JSON.parse(messageString);
+      if (parsedMessage.type) {
+        console.log(`📡 Broadcasting ${parsedMessage.type} to plane tracker subscribers`);
+      }
+    } catch (e) {
+      // Message is not JSON, just log that we're broadcasting
+      console.log('📡 Broadcasting non-JSON data to plane tracker subscribers');
+    }
   }
 
   let activeClientCount = 0;
@@ -317,7 +523,12 @@ function broadcastDataToSubscribedPlaneTrackers(message: string | object) {
     manageTrackerConnection();
   }
 
+  if (DEBUG_WEBSOCKET) {
+    console.log(`📡 Broadcast complete: ${activeClientCount} clients received data, ${failedClientCount} failed, ${clientsToRemove.length} removed`);
+  }
+
   if (activeClientCount > 0) {
+    // Data successfully sent to clients
   }
 }
 

@@ -34,6 +34,8 @@ export interface LiveAircraft {
   isSelected?: boolean
   /** Whether this is a school/training flight */
   isSchoolFlight?: boolean
+  /** Whether this aircraft belongs to the club (registered in local DB) */
+  isClubPlane?: boolean
   /** Data source for the aircraft tracking */
   source?: 'adsb' | 'ogn' | 'flarm'
   /** Whether the aircraft has FLARM tracking (legacy field, use source instead) */

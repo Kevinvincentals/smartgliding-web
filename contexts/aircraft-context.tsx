@@ -278,7 +278,7 @@ export function AircraftProvider({
         if (jsonData.type === 'aircraft_data' && Array.isArray(jsonData.data)) {
           setIsConnected(true);
           setConnectionStatus('connected');
-          
+
           // Convert aircraft data
           const convertedAircraft = jsonData.data.map(processAircraftData);
           setAircraft(convertedAircraft);
@@ -287,18 +287,18 @@ export function AircraftProvider({
         else if (jsonData.type === 'adsb_aircraft_data' && Array.isArray(jsonData.data)) {
           setIsConnected(true);
           setConnectionStatus('connected');
-          
+
           // Convert ADSB aircraft data
           const convertedAircraft = jsonData.data.map(processAircraftData);
           setAircraft(prev => {
             // Create a map of existing aircraft for faster lookup
             const aircraftMap = new Map(prev.map(a => [a.id, a]));
-            
+
             // Add/update ADSB aircraft
             convertedAircraft.forEach((aircraft: LiveAircraft) => {
               aircraftMap.set(aircraft.id, aircraft);
             });
-            
+
             return Array.from(aircraftMap.values());
           });
         }
@@ -306,20 +306,20 @@ export function AircraftProvider({
         else if (jsonData.type === 'aircraft_batch_update' && Array.isArray(jsonData.data)) {
           setIsConnected(true);
           setConnectionStatus('connected');
-          
+
           // Process all aircraft updates in the batch
           const updatedAircraftData: LiveAircraft[] = jsonData.data.map(processAircraftData);
-          
+
           setAircraft(prev => {
             // Create a map of the current aircraft for faster lookup
             const aircraftMap = new Map(prev.map(a => [a.id, a]));
-            
+
             // Process each updated aircraft
             updatedAircraftData.forEach((updatedAircraft: LiveAircraft) => {
               // Simply update or add the aircraft without timestamp checks
               aircraftMap.set(updatedAircraft.id, updatedAircraft);
             });
-            
+
             // Convert map back to array
             const updatedArray = Array.from(aircraftMap.values());
             
@@ -338,13 +338,13 @@ export function AircraftProvider({
         else if (jsonData.type === 'aircraft_update' && jsonData.data) {
           setIsConnected(true);
           setConnectionStatus('connected');
-          
+
           const updatedAircraft = processAircraftData(jsonData.data);
-          
+
           setAircraft(prev => {
             // Find if this aircraft already exists
             const index = prev.findIndex(a => a.id === updatedAircraft.id);
-            
+
             if (index >= 0) {
               // Update existing aircraft without timestamp checks
               const updatedList = [...prev];
@@ -365,13 +365,13 @@ export function AircraftProvider({
         else if (jsonData.type === 'adsb_aircraft_update' && jsonData.data) {
           setIsConnected(true);
           setConnectionStatus('connected');
-          
+
           const updatedAircraft = processAircraftData(jsonData.data);
-          
+
           setAircraft(prev => {
             // Find if this aircraft already exists
             const index = prev.findIndex(a => a.id === updatedAircraft.id);
-            
+
             if (index >= 0) {
               // Update existing aircraft
               const updatedList = [...prev];
