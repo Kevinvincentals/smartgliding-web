@@ -89,6 +89,29 @@ const AltitudeProfile: React.FC<{
   flightStats: FlightStats;
 }> = ({ trackPoints, currentIndex, onSeek, flightStats }) => {
   const canvasRef = useRef<HTMLCanvasElement>(null);
+  const [zoomLevel, setZoomLevel] = useState(1);
+  const [panOffset, setPanOffset] = useState(0);
+  const [isDragging, setIsDragging] = useState(false);
+  const [lastMouseX, setLastMouseX] = useState(0);
+
+  // Auto-pan to keep current position visible when zoomed
+  useEffect(() => {
+    if (zoomLevel > 1 && trackPoints.length > 0 && currentIndex >= 0) {
+      const totalPoints = trackPoints.length;
+      const visiblePointCount = Math.ceil(totalPoints / zoomLevel);
+      const startIndex = Math.floor(panOffset * (totalPoints - visiblePointCount));
+      const endIndex = startIndex + visiblePointCount;
+
+      // If current position is outside visible range, auto-pan to center it
+      if (currentIndex < startIndex || currentIndex > endIndex) {
+        const targetStartIndex = Math.max(0, currentIndex - Math.floor(visiblePointCount / 2));
+        const maxStartIndex = totalPoints - visiblePointCount;
+        const clampedStartIndex = Math.min(targetStartIndex, maxStartIndex);
+        const newPanOffset = clampedStartIndex / (totalPoints - visiblePointCount);
+        setPanOffset(Math.max(0, Math.min(1, newPanOffset)));
+      }
+    }
+  }, [currentIndex, zoomLevel, trackPoints.length, panOffset]);
 
   useEffect(() => {
     const canvas = canvasRef.current;
@@ -106,13 +129,22 @@ const AltitudeProfile: React.FC<{
     // Clear canvas
     ctx.clearRect(0, 0, rect.width, rect.height);
 
-    // Find altitude range - prefer AGL if available, otherwise use MSL
-    const altitudes = trackPoints.map(p => p.altitude_agl !== null ? p.altitude_agl : (p.altitude || 0)).filter(a => a !== null);
-    const minAlt = Math.min(...altitudes);
-    const maxAlt = Math.max(...altitudes);
+    // Calculate visible range based on zoom and pan
+    const totalPoints = trackPoints.length;
+    const visiblePointCount = Math.ceil(totalPoints / zoomLevel);
+    const startIndex = Math.floor(panOffset * (totalPoints - visiblePointCount));
+    const endIndex = Math.min(startIndex + visiblePointCount, totalPoints - 1);
+    const visiblePoints = trackPoints.slice(startIndex, endIndex + 1);
+
+    if (visiblePoints.length === 0) return;
+
+    // Find altitude range for visible points - prefer AGL if available, otherwise use MSL
+    const visibleAltitudes = visiblePoints.map(p => p.altitude_agl !== null ? p.altitude_agl : (p.altitude || 0)).filter(a => a !== null);
+    const minAlt = Math.min(...visibleAltitudes);
+    const maxAlt = Math.max(...visibleAltitudes);
     const altRange = maxAlt - minAlt || 100;
     const padding = 15;
-    const useAgl = trackPoints.some(p => p.altitude_agl !== null);
+    const useAgl = visiblePoints.some(p => p.altitude_agl !== null);
 
     // Draw altitude scale labels with AGL/MSL indicator
     ctx.fillStyle = '#666';
@@ -139,8 +171,8 @@ const AltitudeProfile: React.FC<{
     ctx.beginPath();
     ctx.moveTo(padding + 50, rect.height - padding);
 
-    trackPoints.forEach((point, index) => {
-      const x = (index / (trackPoints.length - 1)) * (rect.width - 2 * padding - 50) + padding + 50;
+    visiblePoints.forEach((point, index) => {
+      const x = (index / (visiblePoints.length - 1)) * (rect.width - 2 * padding - 50) + padding + 50;
       const altValue = useAgl && point.altitude_agl !== null ? point.altitude_agl : (point.altitude || 0);
       const y = rect.height - padding - (altValue - minAlt) / altRange * (rect.height - 2 * padding);
       ctx.lineTo(x, y);
@@ -155,8 +187,8 @@ const AltitudeProfile: React.FC<{
     ctx.lineWidth = 3;
     ctx.beginPath();
 
-    trackPoints.forEach((point, index) => {
-      const x = (index / (trackPoints.length - 1)) * (rect.width - 2 * padding - 50) + padding + 50;
+    visiblePoints.forEach((point, index) => {
+      const x = (index / (visiblePoints.length - 1)) * (rect.width - 2 * padding - 50) + padding + 50;
       const altValue = useAgl && point.altitude_agl !== null ? point.altitude_agl : (point.altitude || 0);
       const y = rect.height - padding - (altValue - minAlt) / altRange * (rect.height - 2 * padding);
 
@@ -168,9 +200,10 @@ const AltitudeProfile: React.FC<{
     });
     ctx.stroke();
 
-    // Draw current position
-    if (currentIndex >= 0 && currentIndex < trackPoints.length) {
-      const x = (currentIndex / (trackPoints.length - 1)) * (rect.width - 2 * padding - 50) + padding + 50;
+    // Draw current position (only if it's within the visible range)
+    if (currentIndex >= 0 && currentIndex < trackPoints.length && currentIndex >= startIndex && currentIndex <= endIndex) {
+      const visibleCurrentIndex = currentIndex - startIndex;
+      const x = (visibleCurrentIndex / (visiblePoints.length - 1)) * (rect.width - 2 * padding - 50) + padding + 50;
       const currentPoint = trackPoints[currentIndex];
       const currentAltValue = useAgl && currentPoint.altitude_agl !== null ? currentPoint.altitude_agl : (currentPoint.altitude || 0);
       const y = rect.height - padding - (currentAltValue - minAlt) / altRange * (rect.height - 2 * padding);
@@ -232,11 +265,12 @@ const AltitudeProfile: React.FC<{
       ctx.fillText(altText, textX, textY);
     }
 
-    // Draw winch launch top marker if applicable
+    // Draw winch launch top marker if applicable (only if it's within the visible range)
     if (flightStats.winchLaunchTopIndex !== null && flightStats.winchLaunchTop !== null) {
       const winchIndex = flightStats.winchLaunchTopIndex;
-      if (winchIndex >= 0 && winchIndex < trackPoints.length) {
-        const x = (winchIndex / (trackPoints.length - 1)) * (rect.width - 2 * padding - 50) + padding + 50;
+      if (winchIndex >= 0 && winchIndex < trackPoints.length && winchIndex >= startIndex && winchIndex <= endIndex) {
+        const visibleWinchIndex = winchIndex - startIndex;
+        const x = (visibleWinchIndex / (visiblePoints.length - 1)) * (rect.width - 2 * padding - 50) + padding + 50;
         const winchAltValue = useAgl && trackPoints[winchIndex].altitude_agl !== null
           ? trackPoints[winchIndex].altitude_agl
           : (trackPoints[winchIndex].altitude || 0);
@@ -265,9 +299,34 @@ const AltitudeProfile: React.FC<{
         ctx.moveTo(x, y - 6);
         ctx.lineTo(x, y - 15);
         ctx.stroke();
+
+        // Always show winch launch altitude tooltip (even when not the current position)
+        const winchAltText = `${winchAltValue.toFixed(0)}m ${altLabel} (Spilstart højde)`;
+
+        ctx.font = 'bold 14px sans-serif';
+        const winchTextWidth = ctx.measureText(winchAltText).width;
+
+        // Position tooltip ABOVE the winch marker
+        let winchTextX = x - winchTextWidth / 2;
+        let winchTextY = y - 30; // Position well above the marker
+
+        // Ensure it doesn't go off screen edges
+        if (winchTextX < padding) {
+          winchTextX = padding;
+        } else if (winchTextX + winchTextWidth > rect.width - padding) {
+          winchTextX = rect.width - winchTextWidth - padding;
+        }
+
+        // Draw text background (amber for winch)
+        ctx.fillStyle = 'rgba(245, 158, 11, 0.9)';
+        ctx.fillRect(winchTextX - 4, winchTextY - 16, winchTextWidth + 8, 20);
+
+        // Draw text
+        ctx.fillStyle = 'white';
+        ctx.fillText(winchAltText, winchTextX, winchTextY);
       }
     }
-  }, [trackPoints, currentIndex, flightStats]);
+  }, [trackPoints, currentIndex, flightStats, zoomLevel, panOffset]);
 
   const handleClick = (e: React.MouseEvent<HTMLCanvasElement>) => {
     const canvas = canvasRef.current;
@@ -284,13 +343,112 @@ const AltitudeProfile: React.FC<{
     }
   };
 
+  const handleWheel = (e: React.WheelEvent<HTMLCanvasElement>) => {
+    e.preventDefault();
+    const canvas = canvasRef.current;
+    if (!canvas) return;
+
+    const rect = canvas.getBoundingClientRect();
+    const mouseX = e.clientX - rect.left;
+    const padding = 15;
+    const relativeMouseX = (mouseX - padding - 50) / (rect.width - 2 * padding - 50);
+
+    const zoomFactor = e.deltaY > 0 ? 0.9 : 1.1;
+    const newZoomLevel = Math.max(1, Math.min(10, zoomLevel * zoomFactor));
+
+    if (newZoomLevel !== zoomLevel) {
+      // Adjust pan to zoom towards mouse position
+      const currentViewCenter = panOffset + 0.5 / zoomLevel;
+      const mousePosition = panOffset + relativeMouseX / zoomLevel;
+      const newPanOffset = mousePosition - 0.5 / newZoomLevel;
+
+      setZoomLevel(newZoomLevel);
+      setPanOffset(Math.max(0, Math.min(1 - 1 / newZoomLevel, newPanOffset)));
+    }
+  };
+
+  const handleMouseDown = (e: React.MouseEvent<HTMLCanvasElement>) => {
+    setIsDragging(false);
+    setLastMouseX(e.clientX);
+  };
+
+  const handleMouseMove = (e: React.MouseEvent<HTMLCanvasElement>) => {
+    if (e.buttons === 1) { // Left mouse button is pressed
+      const deltaX = e.clientX - lastMouseX;
+      const canvas = canvasRef.current;
+      if (!canvas) return;
+
+      if (Math.abs(deltaX) > 2) {
+        setIsDragging(true);
+      }
+
+      const rect = canvas.getBoundingClientRect();
+      const panSensitivity = 1 / (rect.width - 2 * 15 - 50);
+      const panDelta = -deltaX * panSensitivity / zoomLevel;
+
+      const newPanOffset = Math.max(0, Math.min(1 - 1 / zoomLevel, panOffset + panDelta));
+      setPanOffset(newPanOffset);
+      setLastMouseX(e.clientX);
+    }
+  };
+
+  const handleMouseUp = () => {
+    setTimeout(() => setIsDragging(false), 100);
+  };
+
+  const resetZoom = () => {
+    setZoomLevel(1);
+    setPanOffset(0);
+  };
+
   return (
-    <canvas
-      ref={canvasRef}
-      className="w-full h-full cursor-pointer"
-      onClick={handleClick}
-      style={{ width: '100%', height: '100%' }}
-    />
+    <div className="relative w-full h-full">
+      <canvas
+        ref={canvasRef}
+        className="w-full h-full cursor-crosshair"
+        onClick={(e) => {
+          if (isDragging) return;
+
+          const canvas = canvasRef.current;
+          if (!canvas || trackPoints.length === 0) return;
+
+          const rect = canvas.getBoundingClientRect();
+          const x = e.clientX - rect.left;
+          const padding = 15;
+
+          const visibleWidth = rect.width - 2 * padding - 50;
+          const totalPoints = trackPoints.length;
+          const visiblePointCount = Math.ceil(totalPoints / zoomLevel);
+          const startIndex = Math.floor(panOffset * (totalPoints - visiblePointCount));
+
+          const relativeX = (x - padding - 50) / visibleWidth;
+          const index = Math.round(startIndex + relativeX * visiblePointCount);
+
+          if (index >= 0 && index < trackPoints.length) {
+            onSeek(index);
+          }
+        }}
+        onWheel={handleWheel}
+        onMouseDown={handleMouseDown}
+        onMouseMove={handleMouseMove}
+        onMouseUp={handleMouseUp}
+        onMouseLeave={handleMouseUp}
+        style={{ width: '100%', height: '100%' }}
+      />
+      {zoomLevel > 1 && (
+        <div className="absolute top-2 right-2 flex gap-1">
+          <div className="bg-background/90 backdrop-blur-sm rounded px-2 py-1 text-xs font-medium">
+            {zoomLevel.toFixed(1)}x
+          </div>
+          <button
+            onClick={resetZoom}
+            className="bg-background/90 backdrop-blur-sm hover:bg-background rounded px-2 py-1 text-xs font-medium transition-colors"
+          >
+            Reset
+          </button>
+        </div>
+      )}
+    </div>
   );
 };
 
@@ -455,7 +613,7 @@ const ReplayMapCore: React.FC<{
   }
 
   return (
-    <div className="h-full w-full flex flex-col">
+    <div className="h-[100vh] w-full grid grid-rows-[auto_1fr_auto_auto] md:flex md:flex-col">
       {/* Header - Compact on mobile */}
       <div className="flex flex-col md:flex-row md:items-center justify-between px-3 md:px-4 py-2 md:py-3 border-b bg-background space-y-1 md:space-y-0">
         <div className="flex flex-col space-y-1 md:space-y-2 min-w-0 flex-1">
@@ -516,8 +674,8 @@ const ReplayMapCore: React.FC<{
         </div>
       </div>
 
-      {/* Map Container - Adaptive height */}
-      <div className="flex-1 relative max-h-[35vh] sm:max-h-[45vh] md:max-h-[50vh]">
+      {/* Map Container - Takes remaining space */}
+      <div className="relative min-h-0 md:flex-1">
         <MapContainer
           ref={map => { if (map) mapRef.current = map; }}
           center={trackPoints.length > 0 ? [trackPoints[0].latitude, trackPoints[0].longitude] : [55.5, 10.5]}
@@ -548,50 +706,50 @@ const ReplayMapCore: React.FC<{
 
         {/* Stats Overlay */}
         {currentReplayPoint && (
-          <div className="absolute top-4 left-4 bg-background/95 backdrop-blur-sm rounded-lg p-4 shadow-lg z-[400]">
-            <div className="grid grid-cols-2 gap-x-6 gap-y-2 text-base">
+          <div className="absolute top-4 left-4 bg-background/95 backdrop-blur-sm rounded-lg p-3 md:p-4 shadow-lg z-[400]">
+            <div className="grid grid-cols-2 gap-x-4 md:gap-x-6 gap-y-2 text-sm md:text-base">
               <div className="flex flex-col">
                 <div className="flex items-center gap-2">
-                  <ArrowUp className="h-5 w-5 text-blue-500" />
+                  <ArrowUp className="h-4 w-4 md:h-5 md:w-5 text-blue-500" />
                   {currentReplayPoint.altitude_agl !== null ? (
-                    <span className="font-bold text-lg">{currentReplayPoint.altitude_agl.toFixed(0)}m AGL</span>
+                    <span className="font-bold text-base md:text-lg">{currentReplayPoint.altitude_agl.toFixed(0)}m AGL</span>
                   ) : (
-                    <span className="font-bold text-lg">{currentReplayPoint.altitude?.toFixed(0) ?? '0'}m MSL</span>
+                    <span className="font-bold text-base md:text-lg">{currentReplayPoint.altitude?.toFixed(0) ?? '0'}m MSL</span>
                   )}
                 </div>
                 {currentReplayPoint.altitude_agl !== null && currentReplayPoint.altitude !== null && (
-                  <div className="text-sm text-muted-foreground ml-7">
+                  <div className="text-xs md:text-sm text-muted-foreground ml-6 md:ml-7">
                     {currentReplayPoint.altitude.toFixed(0)}m MSL
                   </div>
                 )}
               </div>
               <div className="flex items-center gap-2">
-                <WindIcon className="h-5 w-5 text-green-500" />
-                <span className="font-bold text-lg">{currentReplayPoint.ground_speed ? (currentReplayPoint.ground_speed * 1.852).toFixed(0) : '0'}km/t</span>
+                <WindIcon className="h-4 w-4 md:h-5 md:w-5 text-green-500" />
+                <span className="font-bold text-base md:text-lg">{currentReplayPoint.ground_speed ? (currentReplayPoint.ground_speed * 1.852).toFixed(0) : '0'}km/t</span>
               </div>
               <div className="flex items-center gap-2">
-                <Compass className="h-5 w-5 text-purple-500" />
-                <span className="font-bold text-lg">{currentReplayPoint.track?.toFixed(0) ?? '0'}°</span>
+                <Compass className="h-4 w-4 md:h-5 md:w-5 text-purple-500" />
+                <span className="font-bold text-base md:text-lg">{currentReplayPoint.track?.toFixed(0) ?? '0'}°</span>
               </div>
               <div className="flex items-center gap-2">
                 {currentReplayPoint.climb_rate && currentReplayPoint.climb_rate > 0.2 ? (
-                  <TrendingUp className="h-5 w-5 text-emerald-500" />
+                  <TrendingUp className="h-4 w-4 md:h-5 md:w-5 text-emerald-500" />
                 ) : currentReplayPoint.climb_rate && currentReplayPoint.climb_rate < -0.2 ? (
-                  <TrendingDown className="h-5 w-5 text-red-500" />
+                  <TrendingDown className="h-4 w-4 md:h-5 md:w-5 text-red-500" />
                 ) : (
-                  <Minus className="h-5 w-5 text-gray-400" />
+                  <Minus className="h-4 w-4 md:h-5 md:w-5 text-gray-400" />
                 )}
-                <span className="font-bold text-lg">{currentReplayPoint.climb_rate?.toFixed(1) ?? '0.0'}m/s</span>
+                <span className="font-bold text-base md:text-lg">{currentReplayPoint.climb_rate?.toFixed(1) ?? '0.0'}m/s</span>
               </div>
             </div>
           </div>
         )}
       </div>
 
-      {/* Altitude Profile Section - Compact on mobile */}
+      {/* Altitude Profile Section */}
       <div className="border-t bg-muted/30">
         <div className="p-2 md:p-3">
-          <div className="h-20 sm:h-24 md:h-32 lg:h-40 bg-background rounded-lg border">
+          <div className="h-[18vh] md:h-40 lg:h-44 bg-background rounded-lg border">
             <AltitudeProfile
               trackPoints={trackPoints}
               currentIndex={currentPointIndex}
@@ -602,12 +760,12 @@ const ReplayMapCore: React.FC<{
         </div>
       </div>
 
-      {/* Bottom Controls - Compact on mobile */}
+      {/* Bottom Controls */}
       <div className="border-t bg-background">
-        <div className="px-3 md:px-4 py-2 md:py-3 space-y-2 md:space-y-3">
+        <div className="px-3 md:px-4 py-3 space-y-3">
           {/* Timeline */}
           <div className="flex items-center gap-2 md:gap-3">
-            <span className="text-xs md:text-base text-muted-foreground min-w-[50px] md:min-w-[70px] font-mono">
+            <span className="text-xs md:text-base text-muted-foreground min-w-[45px] md:min-w-[70px] font-mono text-center">
               {currentReplayPoint ? new Date(currentReplayPoint.timestamp).toLocaleTimeString('da-DK', { hour: '2-digit', minute: '2-digit', second: '2-digit' }) : '--:--:--'}
             </span>
             <Slider
@@ -618,33 +776,33 @@ const ReplayMapCore: React.FC<{
               onValueChange={(value) => handleSeek(value[0])}
               className="flex-1"
             />
-            <span className="text-xs md:text-base text-muted-foreground min-w-[50px] md:min-w-[70px] text-right font-mono">
+            <span className="text-xs md:text-base text-muted-foreground min-w-[45px] md:min-w-[70px] text-right font-mono">
               {flightData.stats.endTime ? new Date(flightData.stats.endTime).toLocaleTimeString('da-DK', { hour: '2-digit', minute: '2-digit', second: '2-digit' }) : '--:--:--'}
             </span>
           </div>
 
-          {/* Playback Controls - Smaller on mobile */}
-          <div className="flex items-center justify-center gap-2 md:gap-4">
-            <Button variant="outline" size="sm" onClick={resetReplay} className="h-9 w-9 md:h-12 md:w-12">
-              <RotateCcw className="h-4 w-4 md:h-6 md:w-6" />
+          {/* Playback Controls - Larger on mobile */}
+          <div className="flex items-center justify-center gap-3 md:gap-4">
+            <Button variant="outline" size="sm" onClick={resetReplay} className="h-12 w-12 md:h-12 md:w-12">
+              <RotateCcw className="h-6 w-6 md:h-6 md:w-6" />
             </Button>
             {replayStatus === "playing" ? (
-              <Button variant="default" size="sm" onClick={pauseReplay} className="h-10 w-10 md:h-14 md:w-14">
-                <Pause className="h-5 w-5 md:h-8 md:w-8" />
+              <Button variant="default" size="sm" onClick={pauseReplay} className="h-14 w-14 md:h-14 md:w-14">
+                <Pause className="h-7 w-7 md:h-8 md:w-8" />
               </Button>
             ) : (
-              <Button variant="default" size="sm" onClick={startReplay} disabled={replayStatus === 'ended'} className="h-10 w-10 md:h-14 md:w-14">
-                <Play className="h-5 w-5 md:h-8 md:w-8" />
+              <Button variant="default" size="sm" onClick={startReplay} disabled={replayStatus === 'ended'} className="h-14 w-14 md:h-14 md:w-14">
+                <Play className="h-7 w-7 md:h-8 md:w-8" />
               </Button>
             )}
-            <div className="flex items-center gap-1 md:gap-2 ml-2 md:ml-4">
+            <div className="flex items-center gap-2 md:gap-2 ml-3 md:ml-4">
               {[1, 2, 4, 8].map((speed: number) => (
                 <Button
                   key={speed}
                   variant={replaySpeed === speed ? "secondary" : "outline"}
                   size="sm"
                   onClick={() => setReplaySpeed(speed)}
-                  className="h-8 md:h-10 px-2 md:px-4 text-xs md:text-base"
+                  className="h-10 md:h-10 px-3 md:px-4 text-sm md:text-base"
                 >
                   {speed}x
                 </Button>
@@ -693,9 +851,9 @@ export function StatisticsReplayMap({ flightLogbookId, aircraftRegistration, onC
   return (
     <Dialog open={true} onOpenChange={(open) => !open && onClose()}>
       <DialogContent className="max-w-7xl w-full h-[100vh] md:h-[95vh] md:w-[98vw] lg:w-[95vw] p-0 rounded-none md:rounded-lg overflow-hidden" onEscapeKeyDown={onClose}>
-        <DialogClose className="absolute right-2 top-2 md:right-4 md:top-4 z-[500] bg-background/95 backdrop-blur-sm rounded-lg p-1 hover:bg-background shadow-lg border">
-          <Button variant="ghost" size="icon" aria-label="Luk" className="h-8 w-8 md:h-10 md:w-10">
-            <X className="h-4 w-4 md:h-6 md:w-6" />
+        <DialogClose className="absolute right-4 top-4 z-[500] bg-background/95 backdrop-blur-sm rounded-lg p-1 hover:bg-background shadow-lg border">
+          <Button variant="ghost" size="icon" aria-label="Luk" className="h-10 w-10">
+            <X className="h-6 w-6" />
           </Button>
         </DialogClose>
 
