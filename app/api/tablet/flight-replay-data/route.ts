@@ -238,11 +238,38 @@ export async function GET(request: NextRequest): Promise<NextResponse<FlightTrac
         track: point.track,
         ground_speed: point.ground_speed,
         climb_rate: point.climb_rate,
+        climb_rate_30s: null, // Will be calculated below
+        climb_rate_60s: null, // Will be calculated below
         turn_rate: point.turn_rate,
         timestamp: currentTimestamp.toISOString(),
       };
     });
-    
+
+    // Calculate 30s and 60s climb rate averages for each point
+    for (let i = 0; i < serializedData.length; i++) {
+      // Calculate 30-second average (previous 30 points including current)
+      const start30 = Math.max(0, i - 29);
+      const points30 = serializedData.slice(start30, i + 1);
+      const validClimbRates30 = points30
+        .map(p => p.climb_rate)
+        .filter((rate): rate is number => rate !== null && !isNaN(rate));
+
+      if (validClimbRates30.length > 0) {
+        serializedData[i].climb_rate_30s = validClimbRates30.reduce((sum, rate) => sum + rate, 0) / validClimbRates30.length;
+      }
+
+      // Calculate 60-second average (previous 60 points including current)
+      const start60 = Math.max(0, i - 59);
+      const points60 = serializedData.slice(start60, i + 1);
+      const validClimbRates60 = points60
+        .map(p => p.climb_rate)
+        .filter((rate): rate is number => rate !== null && !isNaN(rate));
+
+      if (validClimbRates60.length > 0) {
+        serializedData[i].climb_rate_60s = validClimbRates60.reduce((sum, rate) => sum + rate, 0) / validClimbRates60.length;
+      }
+    }
+
     const flightDuration = (minTimestampVal && maxTimestampVal && flarmDataDocuments.length > 1)
       ? Math.round(((maxTimestampVal as Date).getTime() - (minTimestampVal as Date).getTime()) / 60000)
       : 0;

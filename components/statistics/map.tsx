@@ -23,6 +23,8 @@ interface FlightTrackPoint {
   track: number | null;
   ground_speed: number | null; // Knots
   climb_rate: number | null; // m/s
+  climb_rate_30s?: number | null; // m/s 30s average
+  climb_rate_60s?: number | null; // m/s 60s average
   turn_rate: number | null;
   timestamp: string; // ISO string
 }
@@ -79,6 +81,48 @@ const setLeafletIcons = () => {
     iconUrl: "https://unpkg.com/leaflet@1.7.1/dist/images/marker-icon.png",
     shadowUrl: "https://unpkg.com/leaflet@1.7.1/dist/images/marker-shadow.png",
   });
+};
+
+// Variometer Display Component (content only)
+const VariometerDisplay: React.FC<{
+  trackPoints: FlightTrackPoint[];
+  currentIndex: number;
+}> = ({ trackPoints, currentIndex }) => {
+  const currentPoint = trackPoints[currentIndex];
+  const avg30 = currentPoint?.climb_rate_30s || 0;
+  const avg60 = currentPoint?.climb_rate_60s || 0;
+
+  // Determine colors based on climb/sink rates
+  const getColorClass = (rate: number) => {
+    if (rate > 1.0) return 'text-green-500';
+    if (rate > 0.2) return 'text-green-400';
+    if (rate < -1.0) return 'text-red-500';
+    if (rate < -0.2) return 'text-red-400';
+    return 'text-gray-400';
+  };
+
+  const getBgColorClass = (rate: number) => {
+    if (rate > 1.0) return 'bg-green-500/20';
+    if (rate > 0.2) return 'bg-green-400/20';
+    if (rate < -1.0) return 'bg-red-500/20';
+    if (rate < -0.2) return 'bg-red-400/20';
+    return 'bg-gray-400/20';
+  };
+
+  return (
+    <div className="grid grid-cols-2 gap-2 md:gap-3 items-stretch text-sm md:text-base">
+      {/* 30s avg */}
+      <div className={`flex flex-col justify-center items-center rounded-md p-2 md:p-3 ${getBgColorClass(avg30)}`}>
+        <div className="text-[10px] md:text-xs text-muted-foreground">30s AVG</div>
+        <div className={`font-bold text-base md:text-lg ${getColorClass(avg30)}`}>{avg30 >= 0 ? '+' : ''}{avg30.toFixed(1)}m/s</div>
+      </div>
+      {/* 60s avg */}
+      <div className={`flex flex-col justify-center items-center rounded-md p-2 md:p-3 ${getBgColorClass(avg60)}`}>
+        <div className="text-[10px] md:text-xs text-muted-foreground">60s AVG</div>
+        <div className={`font-bold text-base md:text-lg ${getColorClass(avg60)}`}>{avg60 >= 0 ? '+' : ''}{avg60.toFixed(1)}m/s</div>
+      </div>
+    </div>
+  );
 };
 
 // Altitude Profile Component
@@ -668,43 +712,51 @@ const ReplayMapCore: React.FC<{
           )}
         </MapContainer>
 
-        {/* Stats Overlay */}
+        {/* Stats and Variometer Overlays */}
         {currentReplayPoint && (
-          <div className="absolute top-4 left-4 bg-background/95 backdrop-blur-sm rounded-lg p-3 md:p-4 shadow-lg z-[400]">
-            <div className="grid grid-cols-2 gap-x-4 md:gap-x-6 gap-y-2 text-sm md:text-base">
-              <div className="flex flex-col">
-                <div className="flex items-center gap-2">
-                  <ArrowUp className="h-4 w-4 md:h-5 md:w-5 text-blue-500" />
-                  {currentReplayPoint.altitude_agl !== null ? (
-                    <span className="font-bold text-base md:text-lg">{currentReplayPoint.altitude_agl.toFixed(0)}m AGL</span>
-                  ) : (
-                    <span className="font-bold text-base md:text-lg">{currentReplayPoint.altitude?.toFixed(0) ?? '0'}m MSL</span>
+          <div className="absolute top-4 left-4 z-[400] flex items-stretch gap-3 md:gap-4">
+            {/* Stats card */}
+            <div className="bg-background/95 backdrop-blur-sm rounded-lg p-3 md:p-4 shadow-lg">
+              <div className="grid grid-cols-2 gap-x-4 md:gap-x-6 gap-y-2 text-sm md:text-base">
+                <div className="flex flex-col">
+                  <div className="flex items-center gap-2">
+                    <ArrowUp className="h-4 w-4 md:h-5 md:w-5 text-blue-500" />
+                    {currentReplayPoint.altitude_agl !== null ? (
+                      <span className="font-bold text-base md:text-lg">{currentReplayPoint.altitude_agl.toFixed(0)}m AGL</span>
+                    ) : (
+                      <span className="font-bold text-base md:text-lg">{currentReplayPoint.altitude?.toFixed(0) ?? '0'}m MSL</span>
+                    )}
+                  </div>
+                  {currentReplayPoint.altitude_agl !== null && currentReplayPoint.altitude !== null && (
+                    <div className="text-xs md:text-sm text-muted-foreground ml-6 md:ml-7">
+                      {currentReplayPoint.altitude.toFixed(0)}m MSL
+                    </div>
                   )}
                 </div>
-                {currentReplayPoint.altitude_agl !== null && currentReplayPoint.altitude !== null && (
-                  <div className="text-xs md:text-sm text-muted-foreground ml-6 md:ml-7">
-                    {currentReplayPoint.altitude.toFixed(0)}m MSL
-                  </div>
-                )}
+                <div className="flex items-center gap-2">
+                  <WindIcon className="h-4 w-4 md:h-5 md:w-5 text-green-500" />
+                  <span className="font-bold text-base md:text-lg">{currentReplayPoint.ground_speed ? (currentReplayPoint.ground_speed * 1.852).toFixed(0) : '0'}km/t</span>
+                </div>
+                <div className="flex items-center gap-2">
+                  <Compass className="h-4 w-4 md:h-5 md:w-5 text-purple-500" />
+                  <span className="font-bold text-base md:text-lg">{currentReplayPoint.track?.toFixed(0) ?? '0'}°</span>
+                </div>
+                <div className="flex items-center gap-2">
+                  {currentReplayPoint.climb_rate && currentReplayPoint.climb_rate > 0.2 ? (
+                    <TrendingUp className="h-4 w-4 md:h-5 md:w-5 text-emerald-500" />
+                  ) : currentReplayPoint.climb_rate && currentReplayPoint.climb_rate < -0.2 ? (
+                    <TrendingDown className="h-4 w-4 md:h-5 md:w-5 text-red-500" />
+                  ) : (
+                    <Minus className="h-4 w-4 md:h-5 md:w-5 text-gray-400" />
+                  )}
+                  <span className="font-bold text-base md:text-lg">{currentReplayPoint.climb_rate?.toFixed(1) ?? '0.0'}m/s</span>
+                </div>
               </div>
-              <div className="flex items-center gap-2">
-                <WindIcon className="h-4 w-4 md:h-5 md:w-5 text-green-500" />
-                <span className="font-bold text-base md:text-lg">{currentReplayPoint.ground_speed ? (currentReplayPoint.ground_speed * 1.852).toFixed(0) : '0'}km/t</span>
-              </div>
-              <div className="flex items-center gap-2">
-                <Compass className="h-4 w-4 md:h-5 md:w-5 text-purple-500" />
-                <span className="font-bold text-base md:text-lg">{currentReplayPoint.track?.toFixed(0) ?? '0'}°</span>
-              </div>
-              <div className="flex items-center gap-2">
-                {currentReplayPoint.climb_rate && currentReplayPoint.climb_rate > 0.2 ? (
-                  <TrendingUp className="h-4 w-4 md:h-5 md:w-5 text-emerald-500" />
-                ) : currentReplayPoint.climb_rate && currentReplayPoint.climb_rate < -0.2 ? (
-                  <TrendingDown className="h-4 w-4 md:h-5 md:w-5 text-red-500" />
-                ) : (
-                  <Minus className="h-4 w-4 md:h-5 md:w-5 text-gray-400" />
-                )}
-                <span className="font-bold text-base md:text-lg">{currentReplayPoint.climb_rate?.toFixed(1) ?? '0.0'}m/s</span>
-              </div>
+            </div>
+
+            {/* Variometer card */}
+            <div className="bg-background/95 backdrop-blur-sm rounded-lg p-3 md:p-4 shadow-lg flex items-center">
+              <VariometerDisplay trackPoints={trackPoints} currentIndex={currentPointIndex} />
             </div>
           </div>
         )}
