@@ -27,6 +27,8 @@ interface FlightTrackPoint {
   track: number | null;
   ground_speed: number | null; // Speed in knots
   climb_rate: number | null; // m/s
+  climb_rate_30s: number | null; // 30-second average climb rate in m/s
+  climb_rate_60s: number | null; // 60-second average climb rate in m/s
   turn_rate: number | null; // degrees/s
   timestamp: string; // ISO string for consistency
 }

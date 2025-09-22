@@ -11,6 +11,7 @@ import { Slider } from "@/components/ui/slider";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription, DialogFooter, DialogClose } from "@/components/ui/dialog";
 import { Play, Pause, FastForward, RotateCcw, X, Loader2, AlertTriangle, MapPin, ArrowUp, WindIcon, Compass, TrendingUp, TrendingDown, Minus, LocateFixedIcon, Users, CalendarDays, Rocket, Download } from "lucide-react";
+import { useIsMobile } from "@/components/ui/use-mobile";
 
 // Interfaces from the API endpoint
 interface FlightTrackPoint {
@@ -471,6 +472,7 @@ const ReplayMapCore: React.FC<{
   const [replaySpeed, setReplaySpeed] = useState(2);
   const replayIntervalRef = useRef<NodeJS.Timeout | null>(null);
   const [isFollowing, setIsFollowing] = useState(true);
+  const isMobile = useIsMobile();
 
   const trackPoints = useMemo(() => flightData.data || [], [flightData.data]);
   const currentReplayPoint = useMemo(() => trackPoints[currentPointIndex], [trackPoints, currentPointIndex]);
@@ -695,7 +697,7 @@ const ReplayMapCore: React.FC<{
             attribution='&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors'
             url="https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png"
           />
-          <ZoomControl position="topright" />
+          <ZoomControl position={isMobile ? "bottomright" : "topright"} />
           <MapInteractionEvents />
           {pathSegments.map((segment, index) => (
             <Polyline
