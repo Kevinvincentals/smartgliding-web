@@ -200,7 +200,7 @@ const AltitudeProfile: React.FC<{
     });
     ctx.stroke();
 
-    // Draw current position (only if it's within the visible range)
+    // Draw current position (SIMPLE VERSION - ALWAYS show if in visible range)
     if (currentIndex >= 0 && currentIndex < trackPoints.length && currentIndex >= startIndex && currentIndex <= endIndex) {
       const visibleCurrentIndex = currentIndex - startIndex;
       const x = (visibleCurrentIndex / (visiblePoints.length - 1)) * (rect.width - 2 * padding - 50) + padding + 50;
@@ -225,44 +225,45 @@ const AltitudeProfile: React.FC<{
       ctx.fill();
       ctx.stroke();
 
-      // Draw altitude text with background (AGL or MSL)
-      const isWinchTop = flightStats.winchLaunchTopIndex === currentIndex;
-      const altText = isWinchTop
+      // ALWAYS show tooltip - check if winch and modify text
+      const isWinchPoint = flightStats.winchLaunchTopIndex === currentIndex;
+      const altText = isWinchPoint
         ? `${currentAltValue.toFixed(0)}m ${altLabel} (Spilstart højde)`
         : `${currentAltValue.toFixed(0)}m ${altLabel}`;
+
+      console.log('Tooltip Debug:', { currentIndex, winchIndex: flightStats.winchLaunchTopIndex, isWinchPoint, altText, x, y });
 
       ctx.font = 'bold 14px sans-serif';
       const textWidth = ctx.measureText(altText).width;
 
-      // Position text to avoid edge clipping and ensure it's above winch marker
+      // Position text
       let textX = x + 15;
       let textY = y + 4;
 
-      // If this is winch top, position tooltip ABOVE the marker to ensure visibility
-      if (isWinchTop) {
-        textY = y - 25; // Position well above the marker
-        // Center the tooltip horizontally over the marker
-        textX = x - textWidth / 2;
-        // Ensure it doesn't go off screen edges
-        if (textX < padding) {
-          textX = padding;
-        } else if (textX + textWidth > rect.width - padding) {
-          textX = rect.width - textWidth - padding;
+      if (isWinchPoint) {
+        // Position to the right like normal tooltips, but with special styling
+        textX = x + 15;
+        textY = y + 4;
+        // Adjust if going off screen
+        if (x + textWidth + 30 > rect.width) {
+          textX = x - textWidth - 15;
         }
+        console.log('Winch tooltip positioning:', { textX, textY, textWidth, originalY: y });
       } else {
-        // Normal positioning for non-winch points
         if (x + textWidth + 30 > rect.width) {
           textX = x - textWidth - 15;
         }
       }
 
-      // Draw text background (amber if winch top, black otherwise)
-      ctx.fillStyle = isWinchTop ? 'rgba(245, 158, 11, 0.9)' : 'rgba(0, 0, 0, 0.8)';
+      // Draw text background
+      ctx.fillStyle = isWinchPoint ? 'rgba(245, 158, 11, 0.9)' : 'rgba(0, 0, 0, 0.8)';
       ctx.fillRect(textX - 4, textY - 16, textWidth + 8, 20);
 
       // Draw text
       ctx.fillStyle = 'white';
       ctx.fillText(altText, textX, textY);
+
+      console.log('Tooltip rendered:', { altText, textX, textY, fillStyle: ctx.fillStyle });
     }
 
     // Draw winch launch top marker if applicable (only if it's within the visible range)
@@ -300,30 +301,7 @@ const AltitudeProfile: React.FC<{
         ctx.lineTo(x, y - 15);
         ctx.stroke();
 
-        // Always show winch launch altitude tooltip (even when not the current position)
-        const winchAltText = `${winchAltValue.toFixed(0)}m ${altLabel} (Spilstart højde)`;
-
-        ctx.font = 'bold 14px sans-serif';
-        const winchTextWidth = ctx.measureText(winchAltText).width;
-
-        // Position tooltip ABOVE the winch marker
-        let winchTextX = x - winchTextWidth / 2;
-        let winchTextY = y - 30; // Position well above the marker
-
-        // Ensure it doesn't go off screen edges
-        if (winchTextX < padding) {
-          winchTextX = padding;
-        } else if (winchTextX + winchTextWidth > rect.width - padding) {
-          winchTextX = rect.width - winchTextWidth - padding;
-        }
-
-        // Draw text background (amber for winch)
-        ctx.fillStyle = 'rgba(245, 158, 11, 0.9)';
-        ctx.fillRect(winchTextX - 4, winchTextY - 16, winchTextWidth + 8, 20);
-
-        // Draw text
-        ctx.fillStyle = 'white';
-        ctx.fillText(winchAltText, winchTextX, winchTextY);
+        // Don't show separate winch tooltip - it's handled by the current position tooltip
       }
     }
   }, [trackPoints, currentIndex, flightStats, zoomLevel, panOffset]);
@@ -851,10 +829,8 @@ export function StatisticsReplayMap({ flightLogbookId, aircraftRegistration, onC
   return (
     <Dialog open={true} onOpenChange={(open) => !open && onClose()}>
       <DialogContent className="max-w-7xl w-full h-[100vh] md:h-[95vh] md:w-[98vw] lg:w-[95vw] p-0 rounded-none md:rounded-lg overflow-hidden" onEscapeKeyDown={onClose}>
-        <DialogClose className="absolute right-4 top-4 z-[500] bg-background/95 backdrop-blur-sm rounded-lg p-1 hover:bg-background shadow-lg border">
-          <Button variant="ghost" size="icon" aria-label="Luk" className="h-10 w-10">
-            <X className="h-6 w-6" />
-          </Button>
+        <DialogClose className="absolute right-4 top-4 z-[500] bg-background/95 backdrop-blur-sm rounded-lg p-1 hover:bg-background shadow-lg border h-10 w-10 flex items-center justify-center">
+          <X className="h-6 w-6" />
         </DialogClose>
 
         {isLoading && (
