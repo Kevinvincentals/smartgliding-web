@@ -231,8 +231,6 @@ const AltitudeProfile: React.FC<{
         ? `${currentAltValue.toFixed(0)}m ${altLabel} (Spilstart højde)`
         : `${currentAltValue.toFixed(0)}m ${altLabel}`;
 
-      console.log('Tooltip Debug:', { currentIndex, winchIndex: flightStats.winchLaunchTopIndex, isWinchPoint, altText, x, y });
-
       ctx.font = 'bold 14px sans-serif';
       const textWidth = ctx.measureText(altText).width;
 
@@ -240,19 +238,9 @@ const AltitudeProfile: React.FC<{
       let textX = x + 15;
       let textY = y + 4;
 
-      if (isWinchPoint) {
-        // Position to the right like normal tooltips, but with special styling
-        textX = x + 15;
-        textY = y + 4;
-        // Adjust if going off screen
-        if (x + textWidth + 30 > rect.width) {
-          textX = x - textWidth - 15;
-        }
-        console.log('Winch tooltip positioning:', { textX, textY, textWidth, originalY: y });
-      } else {
-        if (x + textWidth + 30 > rect.width) {
-          textX = x - textWidth - 15;
-        }
+      // Adjust if going off screen
+      if (x + textWidth + 30 > rect.width) {
+        textX = x - textWidth - 15;
       }
 
       // Draw text background
@@ -262,8 +250,6 @@ const AltitudeProfile: React.FC<{
       // Draw text
       ctx.fillStyle = 'white';
       ctx.fillText(altText, textX, textY);
-
-      console.log('Tooltip rendered:', { altText, textX, textY, fillStyle: ctx.fillStyle });
     }
 
     // Draw winch launch top marker if applicable (only if it's within the visible range)
