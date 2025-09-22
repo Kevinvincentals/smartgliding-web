@@ -577,7 +577,7 @@ const ReplayMapCore: React.FC<{
   }
 
   return (
-    <div className="h-[100vh] w-full grid grid-rows-[auto_1fr_auto_auto] md:flex md:flex-col">
+    <div className="h-full w-full grid grid-rows-[auto_1fr_auto_auto] md:flex md:flex-col">
       {/* Header - Compact on mobile */}
       <div className="flex flex-col md:flex-row md:items-center justify-between px-3 md:px-4 py-2 md:py-3 border-b bg-background space-y-1 md:space-y-0">
         <div className="flex flex-col space-y-1 md:space-y-2 min-w-0 flex-1">
