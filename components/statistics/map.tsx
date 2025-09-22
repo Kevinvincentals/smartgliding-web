@@ -33,6 +33,9 @@ interface FlightStats {
   minAltitudeAgl: number | null; // AGL
   maxAltitudeAgl: number | null; // AGL
   airfieldElevation: number | null; // MSL in meters
+  winchLaunchTop: number | null; // Altitude at winch launch top (MSL)
+  winchLaunchTopIndex: number | null; // Index in trackPoints where winch launch top occurs
+  isWinchFlight: boolean; // Whether this flight was detected as winch launch
   maxSpeed: number | null; // Knots
   flightDuration: number; // minutes
   startTime: string | null;
@@ -83,7 +86,8 @@ const AltitudeProfile: React.FC<{
   trackPoints: FlightTrackPoint[];
   currentIndex: number;
   onSeek: (index: number) => void;
-}> = ({ trackPoints, currentIndex, onSeek }) => {
+  flightStats: FlightStats;
+}> = ({ trackPoints, currentIndex, onSeek, flightStats }) => {
   const canvasRef = useRef<HTMLCanvasElement>(null);
 
   useEffect(() => {
@@ -189,25 +193,81 @@ const AltitudeProfile: React.FC<{
       ctx.stroke();
 
       // Draw altitude text with background (AGL or MSL)
-      const altText = `${currentAltValue.toFixed(0)}m ${altLabel}`;
+      const isWinchTop = flightStats.winchLaunchTopIndex === currentIndex;
+      const altText = isWinchTop
+        ? `${currentAltValue.toFixed(0)}m ${altLabel} (Spilstart højde)`
+        : `${currentAltValue.toFixed(0)}m ${altLabel}`;
+
       ctx.font = 'bold 14px sans-serif';
       const textWidth = ctx.measureText(altText).width;
 
-      // Position text to avoid edge clipping
+      // Position text to avoid edge clipping and ensure it's above winch marker
       let textX = x + 15;
-      if (x + textWidth + 30 > rect.width) {
-        textX = x - textWidth - 15;
+      let textY = y + 4;
+
+      // If this is winch top, position tooltip ABOVE the marker to ensure visibility
+      if (isWinchTop) {
+        textY = y - 25; // Position well above the marker
+        // Center the tooltip horizontally over the marker
+        textX = x - textWidth / 2;
+        // Ensure it doesn't go off screen edges
+        if (textX < padding) {
+          textX = padding;
+        } else if (textX + textWidth > rect.width - padding) {
+          textX = rect.width - textWidth - padding;
+        }
+      } else {
+        // Normal positioning for non-winch points
+        if (x + textWidth + 30 > rect.width) {
+          textX = x - textWidth - 15;
+        }
       }
 
-      // Draw text background
-      ctx.fillStyle = 'rgba(0, 0, 0, 0.8)';
-      ctx.fillRect(textX - 4, y - 12, textWidth + 8, 20);
+      // Draw text background (amber if winch top, black otherwise)
+      ctx.fillStyle = isWinchTop ? 'rgba(245, 158, 11, 0.9)' : 'rgba(0, 0, 0, 0.8)';
+      ctx.fillRect(textX - 4, textY - 16, textWidth + 8, 20);
 
       // Draw text
       ctx.fillStyle = 'white';
-      ctx.fillText(altText, textX, y + 4);
+      ctx.fillText(altText, textX, textY);
     }
-  }, [trackPoints, currentIndex]);
+
+    // Draw winch launch top marker if applicable
+    if (flightStats.winchLaunchTopIndex !== null && flightStats.winchLaunchTop !== null) {
+      const winchIndex = flightStats.winchLaunchTopIndex;
+      if (winchIndex >= 0 && winchIndex < trackPoints.length) {
+        const x = (winchIndex / (trackPoints.length - 1)) * (rect.width - 2 * padding - 50) + padding + 50;
+        const winchAltValue = useAgl && trackPoints[winchIndex].altitude_agl !== null
+          ? trackPoints[winchIndex].altitude_agl
+          : (trackPoints[winchIndex].altitude || 0);
+        const y = rect.height - padding - (winchAltValue - minAlt) / altRange * (rect.height - 2 * padding);
+
+        // Draw subtle winch launch top marker (small circle with dot)
+        // Outer circle
+        ctx.fillStyle = 'rgba(245, 158, 11, 0.8)'; // Semi-transparent amber
+        ctx.strokeStyle = 'rgba(245, 158, 11, 1)'; // Solid amber border
+        ctx.lineWidth = 2;
+        ctx.beginPath();
+        ctx.arc(x, y, 6, 0, 2 * Math.PI);
+        ctx.fill();
+        ctx.stroke();
+
+        // Inner dot
+        ctx.fillStyle = '#ffffff';
+        ctx.beginPath();
+        ctx.arc(x, y, 2.5, 0, 2 * Math.PI);
+        ctx.fill();
+
+        // Small indicator line going up
+        ctx.strokeStyle = 'rgba(245, 158, 11, 0.6)';
+        ctx.lineWidth = 1;
+        ctx.beginPath();
+        ctx.moveTo(x, y - 6);
+        ctx.lineTo(x, y - 15);
+        ctx.stroke();
+      }
+    }
+  }, [trackPoints, currentIndex, flightStats]);
 
   const handleClick = (e: React.MouseEvent<HTMLCanvasElement>) => {
     const canvas = canvasRef.current;
@@ -396,32 +456,32 @@ const ReplayMapCore: React.FC<{
 
   return (
     <div className="h-full w-full flex flex-col">
-      {/* Header with much larger text */}
-      <div className="flex flex-col md:flex-row md:items-center justify-between px-4 py-3 border-b bg-background space-y-2 md:space-y-0">
-        <div className="flex flex-col space-y-2">
+      {/* Header - Compact on mobile */}
+      <div className="flex flex-col md:flex-row md:items-center justify-between px-3 md:px-4 py-2 md:py-3 border-b bg-background space-y-1 md:space-y-0">
+        <div className="flex flex-col space-y-1 md:space-y-2 min-w-0 flex-1">
           {/* Aircraft Info */}
-          <div className="flex items-center gap-3">
-            <span className="font-bold text-xl md:text-2xl">
+          <div className="flex items-center gap-2 md:gap-3">
+            <span className="font-bold text-lg md:text-xl lg:text-2xl truncate">
               {flightDetails?.registration || aircraftRegistrationDisplay}
             </span>
             {flightDetails?.planeType && (
-              <span className="text-lg text-muted-foreground">• {flightDetails.planeType}</span>
+              <span className="text-sm md:text-lg text-muted-foreground hidden sm:inline">• {flightDetails.planeType}</span>
             )}
           </div>
 
-          {/* Pilot & Time Info with FULL names */}
+          {/* Pilot & Time Info - More compact on mobile */}
           {flightDetails && (
-            <div className="flex flex-col lg:flex-row lg:items-center gap-2 lg:gap-6 text-base">
-              <div className="flex items-center gap-2">
-                <Users className="h-5 w-5 text-muted-foreground" />
-                <span className="font-medium">
+            <div className="flex flex-col sm:flex-row sm:items-center gap-1 sm:gap-4 text-sm md:text-base">
+              <div className="flex items-center gap-1.5 min-w-0">
+                <Users className="h-4 w-4 md:h-5 md:w-5 text-muted-foreground flex-shrink-0" />
+                <span className="font-medium truncate">
                   {flightDetails.pilot1Name || "N/A"}
                   {flightDetails.pilot2Name && ` / ${flightDetails.pilot2Name}`}
                 </span>
               </div>
-              <div className="flex items-center gap-2">
-                <CalendarDays className="h-5 w-5 text-muted-foreground" />
-                <span className="text-muted-foreground">
+              <div className="flex items-center gap-1.5">
+                <CalendarDays className="h-4 w-4 md:h-5 md:w-5 text-muted-foreground flex-shrink-0" />
+                <span className="text-muted-foreground text-xs md:text-sm">
                   {flightDetails.takeoffTime && new Date(flightDetails.takeoffTime).toLocaleTimeString('da-DK', { hour: '2-digit', minute: '2-digit' })}
                   {flightDetails.landingTime && ` - ${new Date(flightDetails.landingTime).toLocaleTimeString('da-DK', { hour: '2-digit', minute: '2-digit' })}`}
                 </span>
@@ -430,33 +490,34 @@ const ReplayMapCore: React.FC<{
           )}
         </div>
 
-        {/* Actions with proper spacing */}
-        <div className="flex items-center gap-3 md:mr-16">
+        {/* Actions - Compact on mobile */}
+        <div className="flex items-center gap-2 md:gap-3 md:mr-12 lg:mr-16">
           <Button
             variant={isFollowing ? "secondary" : "outline"}
-            size="lg"
+            size={"sm"}
             onClick={() => setIsFollowing(!isFollowing)}
-            className="h-12 px-4 text-base"
+            className="h-9 md:h-12 px-3 md:px-4 text-sm md:text-base"
             title={isFollowing ? "Stop med at følge" : "Følg fly"}
           >
-            <LocateFixedIcon className={`h-5 w-5 mr-2 ${isFollowing ? 'text-primary' : ''}`} />
-            {isFollowing ? "Følger" : "Følg"}
+            <LocateFixedIcon className={`h-4 w-4 md:h-5 md:w-5 mr-1 md:mr-2 ${isFollowing ? 'text-primary' : ''}`} />
+            <span className="hidden sm:inline">{isFollowing ? "Følger" : "Følg"}</span>
           </Button>
           <Button
             variant="outline"
-            size="lg"
+            size={"sm"}
             onClick={handleDownloadIGC}
-            className="h-12 px-4 text-base"
+            className="h-9 md:h-12 px-3 md:px-4 text-sm md:text-base"
             title="Download IGC fil"
           >
-            <Download className="h-5 w-5 mr-2" />
-            Download IGC
+            <Download className="h-4 w-4 md:h-5 md:w-5 mr-1 md:mr-2" />
+            <span className="hidden sm:inline">Download IGC</span>
+            <span className="sm:hidden">IGC</span>
           </Button>
         </div>
       </div>
 
-      {/* Map Container - Reduced height */}
-      <div className="flex-1 relative max-h-[50vh] md:max-h-[55vh]">
+      {/* Map Container - Adaptive height */}
+      <div className="flex-1 relative max-h-[35vh] sm:max-h-[45vh] md:max-h-[50vh]">
         <MapContainer
           ref={map => { if (map) mapRef.current = map; }}
           center={trackPoints.length > 0 ? [trackPoints[0].latitude, trackPoints[0].longitude] : [55.5, 10.5]}
@@ -527,26 +588,26 @@ const ReplayMapCore: React.FC<{
         )}
       </div>
 
-      {/* Altitude Profile Section */}
+      {/* Altitude Profile Section - Compact on mobile */}
       <div className="border-t bg-muted/30">
-        <div className="p-3">
-          <div className="text-sm font-medium text-muted-foreground mb-2">Højdeprofil</div>
-          <div className="h-32 md:h-40 bg-background rounded-lg border">
+        <div className="p-2 md:p-3">
+          <div className="h-20 sm:h-24 md:h-32 lg:h-40 bg-background rounded-lg border">
             <AltitudeProfile
               trackPoints={trackPoints}
               currentIndex={currentPointIndex}
               onSeek={handleSeekToIndex}
+              flightStats={flightData.stats}
             />
           </div>
         </div>
       </div>
 
-      {/* Bottom Controls */}
+      {/* Bottom Controls - Compact on mobile */}
       <div className="border-t bg-background">
-        <div className="px-4 py-3 space-y-3">
+        <div className="px-3 md:px-4 py-2 md:py-3 space-y-2 md:space-y-3">
           {/* Timeline */}
-          <div className="flex items-center gap-3">
-            <span className="text-base text-muted-foreground min-w-[70px] font-mono">
+          <div className="flex items-center gap-2 md:gap-3">
+            <span className="text-xs md:text-base text-muted-foreground min-w-[50px] md:min-w-[70px] font-mono">
               {currentReplayPoint ? new Date(currentReplayPoint.timestamp).toLocaleTimeString('da-DK', { hour: '2-digit', minute: '2-digit', second: '2-digit' }) : '--:--:--'}
             </span>
             <Slider
@@ -557,33 +618,33 @@ const ReplayMapCore: React.FC<{
               onValueChange={(value) => handleSeek(value[0])}
               className="flex-1"
             />
-            <span className="text-base text-muted-foreground min-w-[70px] text-right font-mono">
+            <span className="text-xs md:text-base text-muted-foreground min-w-[50px] md:min-w-[70px] text-right font-mono">
               {flightData.stats.endTime ? new Date(flightData.stats.endTime).toLocaleTimeString('da-DK', { hour: '2-digit', minute: '2-digit', second: '2-digit' }) : '--:--:--'}
             </span>
           </div>
 
-          {/* Playback Controls */}
-          <div className="flex items-center justify-center gap-4">
-            <Button variant="outline" size="lg" onClick={resetReplay} className="h-12 w-12">
-              <RotateCcw className="h-6 w-6" />
+          {/* Playback Controls - Smaller on mobile */}
+          <div className="flex items-center justify-center gap-2 md:gap-4">
+            <Button variant="outline" size="sm" onClick={resetReplay} className="h-9 w-9 md:h-12 md:w-12">
+              <RotateCcw className="h-4 w-4 md:h-6 md:w-6" />
             </Button>
             {replayStatus === "playing" ? (
-              <Button variant="default" size="lg" onClick={pauseReplay} className="h-14 w-14">
-                <Pause className="h-8 w-8" />
+              <Button variant="default" size="sm" onClick={pauseReplay} className="h-10 w-10 md:h-14 md:w-14">
+                <Pause className="h-5 w-5 md:h-8 md:w-8" />
               </Button>
             ) : (
-              <Button variant="default" size="lg" onClick={startReplay} disabled={replayStatus === 'ended'} className="h-14 w-14">
-                <Play className="h-8 w-8" />
+              <Button variant="default" size="sm" onClick={startReplay} disabled={replayStatus === 'ended'} className="h-10 w-10 md:h-14 md:w-14">
+                <Play className="h-5 w-5 md:h-8 md:w-8" />
               </Button>
             )}
-            <div className="flex items-center gap-2 ml-4">
+            <div className="flex items-center gap-1 md:gap-2 ml-2 md:ml-4">
               {[1, 2, 4, 8].map((speed: number) => (
                 <Button
                   key={speed}
                   variant={replaySpeed === speed ? "secondary" : "outline"}
-                  size="lg"
+                  size="sm"
                   onClick={() => setReplaySpeed(speed)}
-                  className="h-10 px-4 text-base"
+                  className="h-8 md:h-10 px-2 md:px-4 text-xs md:text-base"
                 >
                   {speed}x
                 </Button>
@@ -632,9 +693,9 @@ export function StatisticsReplayMap({ flightLogbookId, aircraftRegistration, onC
   return (
     <Dialog open={true} onOpenChange={(open) => !open && onClose()}>
       <DialogContent className="max-w-7xl w-full h-[100vh] md:h-[95vh] md:w-[98vw] lg:w-[95vw] p-0 rounded-none md:rounded-lg overflow-hidden" onEscapeKeyDown={onClose}>
-        <DialogClose className="absolute right-4 top-4 z-[500] bg-background/90 backdrop-blur-sm rounded-lg p-1 hover:bg-background shadow-lg">
-          <Button variant="ghost" size="icon" aria-label="Luk" className="h-10 w-10">
-            <X className="h-6 w-6" />
+        <DialogClose className="absolute right-2 top-2 md:right-4 md:top-4 z-[500] bg-background/95 backdrop-blur-sm rounded-lg p-1 hover:bg-background shadow-lg border">
+          <Button variant="ghost" size="icon" aria-label="Luk" className="h-8 w-8 md:h-10 md:w-10">
+            <X className="h-4 w-4 md:h-6 md:w-6" />
           </Button>
         </DialogClose>
 

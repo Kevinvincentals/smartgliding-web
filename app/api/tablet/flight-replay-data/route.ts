@@ -37,6 +37,9 @@ interface FlightStats {
   minAltitudeAgl: number | null; // AGL
   maxAltitudeAgl: number | null; // AGL
   airfieldElevation: number | null; // MSL in meters
+  winchLaunchTop: number | null; // Altitude at winch launch top (MSL)
+  winchLaunchTopIndex: number | null; // Index in trackPoints where winch launch top occurs
+  isWinchFlight: boolean; // Whether this flight was detected as winch launch
   maxSpeed: number | null;    // Speed in knots
   flightDuration: number;   // in minutes
   startTime: string | null; // ISO string
@@ -49,7 +52,7 @@ interface FlightLogbookDetails {
   pilot2Name: string | null;
   takeoffTime: string | null; // ISO string
   landingTime: string | null; // ISO string
-  launchMethod: string | null;
+  launchMethod: string | null; // S=Spilstart, M=Selvstart, F=Flyslæb
   registration: string | null;
   planeType: string | null;
   isSchoolFlight: boolean | null;
@@ -68,6 +71,9 @@ const initialStats: FlightStats = {
   minAltitudeAgl: null,
   maxAltitudeAgl: null,
   airfieldElevation: null,
+  winchLaunchTop: null,
+  winchLaunchTopIndex: null,
+  isWinchFlight: false,
   maxSpeed: null,
   flightDuration: 0,
   startTime: null,
@@ -241,7 +247,118 @@ export async function GET(request: NextRequest): Promise<NextResponse<FlightTrac
       ? Math.round(((maxTimestampVal as Date).getTime() - (minTimestampVal as Date).getTime()) / 60000)
       : 0;
 
-    console.log(`Returning flight replay data with ${serializedData.length} points, duration: ${flightDuration} minutes`);
+    // Detect winch launch top - either from known winch launch or by detecting winch pattern
+    let winchLaunchTop: number | null = null;
+    let winchLaunchTopIndex: number | null = null;
+    let isWinchFlight = false;
+
+    // First, determine if this is a winch flight
+    if (flightDetails?.launchMethod === 'S') {
+      isWinchFlight = true;
+    } else if (!flightDetails?.launchMethod || flightDetails?.launchMethod === null) {
+      // No launch method set - try to detect winch pattern
+      // Look for characteristic winch launch pattern: sustained high climb rate >6m/s for >10 seconds
+
+      if (serializedData.length > 20) {
+        let consecutiveHighClimbCount = 0;
+        let maxConsecutiveHighClimb = 0;
+        let hasStrongClimbPhase = false;
+
+        for (let i = 0; i < Math.min(serializedData.length, 60); i++) { // Check first 60 points (usually first 1-2 minutes)
+          const climbRate = serializedData[i].climb_rate;
+
+          if (climbRate !== null && climbRate > 6.0) {
+            consecutiveHighClimbCount++;
+            maxConsecutiveHighClimb = Math.max(maxConsecutiveHighClimb, consecutiveHighClimbCount);
+          } else {
+            consecutiveHighClimbCount = 0;
+          }
+        }
+
+        // If we found sustained high climb rate (>10 consecutive points at >6m/s), it's likely a winch
+        if (maxConsecutiveHighClimb >= 10) {
+          hasStrongClimbPhase = true;
+
+          // Additional check: look for rapid altitude gain in early flight
+          const earlyAltitudeGain = serializedData.length > 30
+            ? (serializedData[30].altitude || 0) - (serializedData[0].altitude || 0)
+            : 0;
+
+          // If altitude gain >200m in first 30 points, very likely winch
+          if (earlyAltitudeGain > 200) {
+            isWinchFlight = true;
+            console.log(`Detected winch pattern: ${maxConsecutiveHighClimb} consecutive high climb points, ${earlyAltitudeGain.toFixed(0)}m early gain`);
+          }
+        }
+      }
+    }
+
+    // Now detect winch launch top if this is a winch flight
+    if (isWinchFlight && serializedData.length > 10) {
+      // Enhanced algorithm to detect winch launch top:
+      // 1. Look for the point where sustained high climb transitions to descent/level flight
+      // 2. Focus on early part of flight where winch release typically occurs
+      // 3. Use both climb rate analysis and altitude patterns
+
+      const searchEndIndex = Math.min(serializedData.length, Math.floor(serializedData.length * 0.3)); // Search first 30% of flight
+      const windowSize = 5; // Points to analyze for trend
+      let bestCandidateIndex = -1;
+      let maxTransitionScore = -Infinity;
+
+      for (let i = windowSize; i < searchEndIndex - windowSize; i++) {
+        const beforeWindow = serializedData.slice(i - windowSize, i);
+        const afterWindow = serializedData.slice(i, i + windowSize);
+
+        // Calculate average climb rate before and after this point
+        const avgClimbBefore = beforeWindow
+          .filter(p => p.climb_rate !== null)
+          .reduce((sum, p) => sum + (p.climb_rate || 0), 0) / beforeWindow.filter(p => p.climb_rate !== null).length;
+
+        const avgClimbAfter = afterWindow
+          .filter(p => p.climb_rate !== null)
+          .reduce((sum, p) => sum + (p.climb_rate || 0), 0) / afterWindow.filter(p => p.climb_rate !== null).length;
+
+        // Look for transition from high positive to negative/low climb rate
+        const climbTransition = avgClimbBefore - avgClimbAfter;
+
+        // Current altitude should be reasonable (not too low, not max altitude)
+        const currentAlt = serializedData[i].altitude || 0;
+        const altitudeScore = maxAltitudeVal ? Math.min(currentAlt / maxAltitudeVal, 1.0) : 0.5;
+
+        // Prefer points where:
+        // 1. Strong positive climb before (winch pulling)
+        // 2. Significant transition to lower/negative climb
+        // 3. Reasonable altitude (not too early, not too late)
+        // 4. Not at the very beginning or end of search window
+
+        const transitionScore = climbTransition * altitudeScore * (avgClimbBefore > 3.0 ? 1.5 : 1.0);
+        const isReasonablePosition = i > windowSize * 2 && i < searchEndIndex - windowSize * 2;
+
+        if (transitionScore > maxTransitionScore && isReasonablePosition && avgClimbBefore > 2.0 && climbTransition > 3.0) {
+          maxTransitionScore = transitionScore;
+          bestCandidateIndex = i;
+        }
+      }
+
+      // Fallback: if no good transition found, use the highest point in the first 30% of flight
+      if (bestCandidateIndex === -1) {
+        let maxAltInEarly = -Infinity;
+        for (let i = 10; i < searchEndIndex; i++) {
+          const alt = serializedData[i].altitude || 0;
+          if (alt > maxAltInEarly) {
+            maxAltInEarly = alt;
+            bestCandidateIndex = i;
+          }
+        }
+      }
+
+      if (bestCandidateIndex > 0) {
+        winchLaunchTopIndex = bestCandidateIndex;
+        winchLaunchTop = serializedData[bestCandidateIndex].altitude;
+      }
+    }
+
+    console.log(`Returning flight replay data with ${serializedData.length} points, duration: ${flightDuration} minutes, winch flight: ${isWinchFlight}, winch launch top: ${winchLaunchTop ? `${winchLaunchTop.toFixed(0)}m at index ${winchLaunchTopIndex}` : 'not detected'}`);
 
     return NextResponse.json<FlightTrackDataResponse>({
       success: true,
@@ -252,6 +369,9 @@ export async function GET(request: NextRequest): Promise<NextResponse<FlightTrac
         minAltitudeAgl: minAltitudeAglVal !== null ? parseFloat((minAltitudeAglVal as number).toFixed(1)) : null,
         maxAltitudeAgl: maxAltitudeAglVal !== null ? parseFloat((maxAltitudeAglVal as number).toFixed(1)) : null,
         airfieldElevation,
+        winchLaunchTop: winchLaunchTop !== null ? parseFloat((winchLaunchTop as number).toFixed(1)) : null,
+        winchLaunchTopIndex,
+        isWinchFlight,
         maxSpeed: maxSpeedVal !== null ? parseFloat((maxSpeedVal as number).toFixed(1)) : null,
         flightDuration,
         startTime: minTimestampVal ? (minTimestampVal as Date).toISOString() : null,
