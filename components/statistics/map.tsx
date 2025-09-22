@@ -18,7 +18,8 @@ interface FlightTrackPoint {
   aircraft_id: string;
   latitude: number;
   longitude: number;
-  altitude: number | null;
+  altitude: number | null; // MSL altitude in meters
+  altitude_agl: number | null; // AGL altitude in meters
   track: number | null;
   ground_speed: number | null; // Knots
   climb_rate: number | null; // m/s
@@ -27,8 +28,11 @@ interface FlightTrackPoint {
 }
 
 interface FlightStats {
-  minAltitude: number | null;
-  maxAltitude: number | null;
+  minAltitude: number | null; // MSL
+  maxAltitude: number | null; // MSL
+  minAltitudeAgl: number | null; // AGL
+  maxAltitudeAgl: number | null; // AGL
+  airfieldElevation: number | null; // MSL in meters
   maxSpeed: number | null; // Knots
   flightDuration: number; // minutes
   startTime: string | null;
@@ -39,8 +43,8 @@ interface FlightStats {
 interface FlightLogbookDetails {
   pilot1Name: string | null;
   pilot2Name: string | null;
-  takeoffTime: string | null; 
-  landingTime: string | null; 
+  takeoffTime: string | null;
+  landingTime: string | null;
   launchMethod: string | null;
   registration: string | null;
   planeType: string | null;
@@ -74,21 +78,177 @@ const setLeafletIcons = () => {
   });
 };
 
+// Altitude Profile Component
+const AltitudeProfile: React.FC<{
+  trackPoints: FlightTrackPoint[];
+  currentIndex: number;
+  onSeek: (index: number) => void;
+}> = ({ trackPoints, currentIndex, onSeek }) => {
+  const canvasRef = useRef<HTMLCanvasElement>(null);
+
+  useEffect(() => {
+    const canvas = canvasRef.current;
+    if (!canvas || trackPoints.length === 0) return;
+
+    const ctx = canvas.getContext('2d');
+    if (!ctx) return;
+
+    // Set canvas size
+    const rect = canvas.getBoundingClientRect();
+    canvas.width = rect.width * window.devicePixelRatio;
+    canvas.height = rect.height * window.devicePixelRatio;
+    ctx.scale(window.devicePixelRatio, window.devicePixelRatio);
+
+    // Clear canvas
+    ctx.clearRect(0, 0, rect.width, rect.height);
+
+    // Find altitude range - prefer AGL if available, otherwise use MSL
+    const altitudes = trackPoints.map(p => p.altitude_agl !== null ? p.altitude_agl : (p.altitude || 0)).filter(a => a !== null);
+    const minAlt = Math.min(...altitudes);
+    const maxAlt = Math.max(...altitudes);
+    const altRange = maxAlt - minAlt || 100;
+    const padding = 15;
+    const useAgl = trackPoints.some(p => p.altitude_agl !== null);
+
+    // Draw altitude scale labels with AGL/MSL indicator
+    ctx.fillStyle = '#666';
+    ctx.font = 'bold 14px sans-serif';
+    ctx.textAlign = 'left';
+
+    const altLabel = useAgl ? 'AGL' : 'MSL';
+    // Draw min and max altitude labels
+    ctx.fillText(`${maxAlt.toFixed(0)}m ${altLabel}`, 5, 20);
+    ctx.fillText(`${minAlt.toFixed(0)}m ${altLabel}`, 5, rect.height - 10);
+
+    // Draw middle altitude if range is significant
+    if (altRange > 200) {
+      const midAlt = (minAlt + maxAlt) / 2;
+      ctx.fillText(`${midAlt.toFixed(0)}m ${altLabel}`, 5, rect.height / 2 + 5);
+    }
+
+    // Draw altitude profile with gradient fill
+    const gradient = ctx.createLinearGradient(0, 0, 0, rect.height);
+    gradient.addColorStop(0, 'rgba(59, 130, 246, 0.4)');
+    gradient.addColorStop(1, 'rgba(59, 130, 246, 0.1)');
+
+    ctx.fillStyle = gradient;
+    ctx.beginPath();
+    ctx.moveTo(padding + 50, rect.height - padding);
+
+    trackPoints.forEach((point, index) => {
+      const x = (index / (trackPoints.length - 1)) * (rect.width - 2 * padding - 50) + padding + 50;
+      const altValue = useAgl && point.altitude_agl !== null ? point.altitude_agl : (point.altitude || 0);
+      const y = rect.height - padding - (altValue - minAlt) / altRange * (rect.height - 2 * padding);
+      ctx.lineTo(x, y);
+    });
+
+    ctx.lineTo(rect.width - padding, rect.height - padding);
+    ctx.closePath();
+    ctx.fill();
+
+    // Draw altitude line
+    ctx.strokeStyle = '#3b82f6';
+    ctx.lineWidth = 3;
+    ctx.beginPath();
+
+    trackPoints.forEach((point, index) => {
+      const x = (index / (trackPoints.length - 1)) * (rect.width - 2 * padding - 50) + padding + 50;
+      const altValue = useAgl && point.altitude_agl !== null ? point.altitude_agl : (point.altitude || 0);
+      const y = rect.height - padding - (altValue - minAlt) / altRange * (rect.height - 2 * padding);
+
+      if (index === 0) {
+        ctx.moveTo(x, y);
+      } else {
+        ctx.lineTo(x, y);
+      }
+    });
+    ctx.stroke();
+
+    // Draw current position
+    if (currentIndex >= 0 && currentIndex < trackPoints.length) {
+      const x = (currentIndex / (trackPoints.length - 1)) * (rect.width - 2 * padding - 50) + padding + 50;
+      const currentPoint = trackPoints[currentIndex];
+      const currentAltValue = useAgl && currentPoint.altitude_agl !== null ? currentPoint.altitude_agl : (currentPoint.altitude || 0);
+      const y = rect.height - padding - (currentAltValue - minAlt) / altRange * (rect.height - 2 * padding);
+
+      // Draw vertical line
+      ctx.strokeStyle = 'rgba(239, 68, 68, 0.8)';
+      ctx.lineWidth = 2;
+      ctx.beginPath();
+      ctx.moveTo(x, padding);
+      ctx.lineTo(x, rect.height - padding);
+      ctx.stroke();
+
+      // Draw circle at current altitude
+      ctx.fillStyle = '#ef4444';
+      ctx.strokeStyle = 'white';
+      ctx.lineWidth = 3;
+      ctx.beginPath();
+      ctx.arc(x, y, 6, 0, 2 * Math.PI);
+      ctx.fill();
+      ctx.stroke();
+
+      // Draw altitude text with background (AGL or MSL)
+      const altText = `${currentAltValue.toFixed(0)}m ${altLabel}`;
+      ctx.font = 'bold 14px sans-serif';
+      const textWidth = ctx.measureText(altText).width;
+
+      // Position text to avoid edge clipping
+      let textX = x + 15;
+      if (x + textWidth + 30 > rect.width) {
+        textX = x - textWidth - 15;
+      }
+
+      // Draw text background
+      ctx.fillStyle = 'rgba(0, 0, 0, 0.8)';
+      ctx.fillRect(textX - 4, y - 12, textWidth + 8, 20);
+
+      // Draw text
+      ctx.fillStyle = 'white';
+      ctx.fillText(altText, textX, y + 4);
+    }
+  }, [trackPoints, currentIndex]);
+
+  const handleClick = (e: React.MouseEvent<HTMLCanvasElement>) => {
+    const canvas = canvasRef.current;
+    if (!canvas || trackPoints.length === 0) return;
+
+    const rect = canvas.getBoundingClientRect();
+    const x = e.clientX - rect.left;
+    const padding = 15;
+    const progress = (x - padding - 50) / (rect.width - 2 * padding - 50);
+    const index = Math.round(progress * (trackPoints.length - 1));
+
+    if (index >= 0 && index < trackPoints.length) {
+      onSeek(index);
+    }
+  };
+
+  return (
+    <canvas
+      ref={canvasRef}
+      className="w-full h-full cursor-pointer"
+      onClick={handleClick}
+      style={{ width: '100%', height: '100%' }}
+    />
+  );
+};
+
 const ReplayMapCore: React.FC<{
   flightData: FlightTrackDataResponse;
-  aircraftRegistrationDisplay: string; // Use a different prop name to avoid conflict with flightData.flightDetails.registration
-  flightLogbookId: string; // Add flightLogbookId prop
+  aircraftRegistrationDisplay: string;
+  flightLogbookId: string;
 }> = ({ flightData, aircraftRegistrationDisplay, flightLogbookId }) => {
   const mapRef = useRef<L.Map | null>(null);
   const [replayStatus, setReplayStatus] = useState<"paused" | "playing" | "ended">("paused");
   const [currentPointIndex, setCurrentPointIndex] = useState(0);
   const [replaySpeed, setReplaySpeed] = useState(2);
   const replayIntervalRef = useRef<NodeJS.Timeout | null>(null);
-  const [isFollowing, setIsFollowing] = useState(true); // State for follow mode
+  const [isFollowing, setIsFollowing] = useState(true);
 
   const trackPoints = useMemo(() => flightData.data || [], [flightData.data]);
   const currentReplayPoint = useMemo(() => trackPoints[currentPointIndex], [trackPoints, currentPointIndex]);
-  const { flightDetails } = flightData; // Destructure for easier access
+  const { flightDetails } = flightData;
 
   // Segment flight path for coloring based on climb rate
   const pathSegments = useMemo(() => {
@@ -96,35 +256,33 @@ const ReplayMapCore: React.FC<{
 
     const segments: Array<{ points: Array<[number, number]>; color: string }> = [];
     let currentSegmentPoints: Array<[number, number]> = [[trackPoints[0].latitude, trackPoints[0].longitude]];
-    let lastStatus = "level"; // "climbing", "descending", "level"
+    let lastStatus = "level";
 
     const getStatus = (climbRate: number | null): string => {
       if (climbRate === null || climbRate === undefined) return "level";
-      if (climbRate > 0.25) return "climbing"; // Threshold for climbing
-      if (climbRate < -0.25) return "descending"; // Threshold for descending
+      if (climbRate > 0.25) return "climbing";
+      if (climbRate < -0.25) return "descending";
       return "level";
     };
 
     for (let i = 1; i < trackPoints.length; i++) {
       const point = trackPoints[i];
       const prevPoint = trackPoints[i-1];
-      const currentStatus = getStatus(prevPoint.climb_rate); // Color segment based on prev point's climb rate
+      const currentStatus = getStatus(prevPoint.climb_rate);
 
       if (currentStatus !== lastStatus && currentSegmentPoints.length > 0) {
-        // Add the start of the new segment before pushing the old one
         currentSegmentPoints.push([point.latitude, point.longitude]);
         segments.push({
           points: [...currentSegmentPoints],
-          color: lastStatus === "climbing" ? "#22c55e" : lastStatus === "descending" ? "#ef4444" : "#3b82f6", // Green, Red, Blue
+          color: lastStatus === "climbing" ? "#22c55e" : lastStatus === "descending" ? "#ef4444" : "#3b82f6",
         });
-        currentSegmentPoints = [[prevPoint.latitude, prevPoint.longitude], [point.latitude, point.longitude]]; // Start new segment with the connecting point
+        currentSegmentPoints = [[prevPoint.latitude, prevPoint.longitude], [point.latitude, point.longitude]];
       } else {
         currentSegmentPoints.push([point.latitude, point.longitude]);
       }
       lastStatus = currentStatus;
     }
 
-    // Push the last segment
     if (currentSegmentPoints.length > 1) {
       segments.push({
         points: currentSegmentPoints,
@@ -134,41 +292,33 @@ const ReplayMapCore: React.FC<{
     return segments;
   }, [trackPoints]);
 
-  // Fit map to flight path on initial load or when track points change
+  // Fit map to flight path on initial load
   useEffect(() => {
     if (mapRef.current && trackPoints.length > 0) {
       const bounds = L.latLngBounds(trackPoints.map(p => [p.latitude, p.longitude]));
       mapRef.current.fitBounds(bounds, { padding: [50, 50] });
-      setIsFollowing(true); // Reset to follow after fitting bounds
+      setIsFollowing(true);
     }
-  }, [trackPoints]); // Only depends on trackPoints for initial fit
+  }, [trackPoints]);
 
   // Effect for following the aircraft
   useEffect(() => {
     if (isFollowing && currentReplayPoint && mapRef.current) {
       mapRef.current.panTo([currentReplayPoint.latitude, currentReplayPoint.longitude], {
         animate: true,
-        duration: 0.3, // Smooth pan
+        duration: 0.3,
       });
     }
   }, [currentReplayPoint, isFollowing]);
 
-  // Event handler for map interactions (to disable follow)
+  // Event handler for map interactions
   const MapInteractionEvents = () => {
     const map = useMap();
     useEffect(() => {
       const disableFollow = () => setIsFollowing(false);
-      
-      // Only disable follow on drag events, not on zoom
       map.on("dragstart", disableFollow);
-      
-      // Remove the zoomstart event listener that disables follow
-      // map.on("zoomstart", disableFollow);
-      
       return () => {
         map.off("dragstart", disableFollow);
-        // Also remove this from cleanup
-        // map.off("zoomstart", disableFollow);
       };
     }, [map]);
     return null;
@@ -177,9 +327,8 @@ const ReplayMapCore: React.FC<{
   // Update interval when replay speed changes while playing
   useEffect(() => {
     if (replayStatus === "playing" && trackPoints.length > 0) {
-      // Clear existing interval and create a new one with updated speed
       if (replayIntervalRef.current) clearInterval(replayIntervalRef.current);
-      
+
       replayIntervalRef.current = setInterval(() => {
         setCurrentPointIndex(prevIndex => {
           const nextIndex = prevIndex + 1;
@@ -190,9 +339,8 @@ const ReplayMapCore: React.FC<{
           }
           return nextIndex;
         });
-      }, 1000 / replaySpeed); // Apply the new speed
-      
-      // Cleanup on unmount or speed/status change
+      }, 1000 / replaySpeed);
+
       return () => {
         if (replayIntervalRef.current) clearInterval(replayIntervalRef.current);
       };
@@ -202,28 +350,29 @@ const ReplayMapCore: React.FC<{
   const startReplay = useCallback(() => {
     if (replayStatus === "playing" || trackPoints.length === 0) return;
     setReplayStatus("playing");
-    // The interval will be created by the effect above when replayStatus changes
   }, [replayStatus, trackPoints.length]);
 
   const pauseReplay = useCallback(() => {
     setReplayStatus("paused");
-    // The effect will clear the interval when replayStatus changes
   }, []);
 
   const resetReplay = useCallback(() => {
     setCurrentPointIndex(0);
     setReplayStatus("paused");
-    // The effect will clear the interval when replayStatus changes
   }, []);
 
-  const handleSeek = useCallback((progress: number) => { // progress is 0-100
+  const handleSeek = useCallback((progress: number) => {
     if (trackPoints.length === 0) return;
     const newIndex = Math.floor((progress / 100) * (trackPoints.length - 1));
     setCurrentPointIndex(newIndex);
-    // No need to manipulate intervals here anymore
-    // The useEffect will handle starting/stopping the interval based on replayStatus
   }, [trackPoints.length]);
-  
+
+  const handleSeekToIndex = useCallback((index: number) => {
+    if (index >= 0 && index < trackPoints.length) {
+      setCurrentPointIndex(index);
+    }
+  }, [trackPoints.length]);
+
   const replayProgress = trackPoints.length > 0 ? (currentPointIndex / (trackPoints.length - 1)) * 100 : 0;
 
   // Custom aircraft icon for replay
@@ -234,10 +383,9 @@ const ReplayMapCore: React.FC<{
         <img src="/images/aircrafts/glider.png" style="width: 40px; height: 40px;" alt="Glider Icon" />
       </div>`,
     iconSize: [40, 40],
-    iconAnchor: [20, 20], // Half of the iconSize for centering
+    iconAnchor: [20, 20],
   }), [currentReplayPoint?.track]);
 
-  // Add function to handle IGC download
   const handleDownloadIGC = useCallback(() => {
     window.open(`/api/tablet/flight-download-igc?flight_logbook_id=${flightLogbookId}`, '_blank');
   }, [flightLogbookId]);
@@ -247,163 +395,202 @@ const ReplayMapCore: React.FC<{
   }
 
   return (
-    <div className="h-[85vh] w-full flex flex-col">
-      <MapContainer 
-        ref={map => { if (map) mapRef.current = map; }}
-        center={trackPoints.length > 0 ? [trackPoints[0].latitude, trackPoints[0].longitude] : [55.5, 10.5]} // Default center if no points
-        zoom={trackPoints.length > 0 ? 13 : 7} 
-        style={{ flexGrow: 1, height: "100%", width: "100%" }} 
-        zoomControl={false}
-      >
-        <TileLayer
-          attribution='&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors'
-          url="https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png"
-        />
-        <ZoomControl position="bottomright" />
-        <MapInteractionEvents />
-        {pathSegments.map((segment, index) => (
-          <Polyline 
-            key={index}
-            positions={segment.points as L.LatLngExpression[]}
-            pathOptions={{ color: segment.color, weight: 4, opacity: 0.8 }}
-          />
-        ))}
-        {currentReplayPoint && (
-          <Marker 
-            position={[currentReplayPoint.latitude, currentReplayPoint.longitude]} 
-            icon={replayAircraftIcon}
-          >
-            {/* Optionally, add a popup with current data */}
-          </Marker>
-        )}
-      </MapContainer>
-      <div className="p-4 border-t bg-background space-y-3">
-        <div className="flex items-center justify-between">
-            <div>
-                <h3 className="font-semibold text-xl">{flightDetails?.registration || aircraftRegistrationDisplay}</h3>
-                {flightDetails?.planeType && <p className="text-xs text-muted-foreground">{flightDetails.planeType}</p>}
-            </div>
-            <div className="flex gap-2">
-                <Button 
-                    variant="outline" 
-                    size="sm"
-                    onClick={handleDownloadIGC}
-                    className="gap-1.5 h-9"
-                    title="Download som IGC fil"
-                >
-                    <Download className="h-4 w-4" />
-                    Download IGC
-                </Button>
-                <Button 
-                    variant={isFollowing ? "secondary" : "outline"} 
-                    size="sm"
-                    onClick={() => setIsFollowing(!isFollowing)}
-                    className="gap-1.5 h-9"
-                    title={isFollowing ? "Stop med at følge flyet" : "Følg flyet"}
-                >
-                    <LocateFixedIcon className={`h-4 w-4 ${isFollowing ? 'text-primary' : ''}`} />
-                    {isFollowing ? "Følger" : "Følg"}
-                </Button>
-            </div>
-        </div>
-
-        {/* Flight Details Section */}
-        {flightDetails && (
-          <div className="grid grid-cols-2 md:grid-cols-3 gap-x-4 gap-y-2 text-sm border-b pb-3 mb-2">
-            <div className="flex items-center gap-1.5">
-              <Users className="h-4 w-4 text-muted-foreground" />
-              <span>{flightDetails.pilot1Name || "N/A"}
-                {flightDetails.pilot2Name && ` / ${flightDetails.pilot2Name}`}
-              </span>
-            </div>
-            <div className="flex items-center gap-1.5">
-              <CalendarDays className="h-4 w-4 text-muted-foreground" />
-              <span>
-                {flightDetails.takeoffTime ? new Date(flightDetails.takeoffTime).toLocaleDateString('da-DK', { month: 'short', day: 'numeric'}) : ''}
-                {' '}
-                {flightDetails.takeoffTime ? new Date(flightDetails.takeoffTime).toLocaleTimeString('da-DK', { hour: '2-digit', minute: '2-digit' }) : "N/A"}
-                {flightDetails.landingTime && ` - ${new Date(flightDetails.landingTime).toLocaleTimeString('da-DK', { hour: '2-digit', minute: '2-digit' })}`}
-              </span>
-            </div>
-             {flightDetails.isSchoolFlight && (
-              <div className="flex items-center gap-1.5 text-blue-600 font-medium">
-                <TrendingUp className="h-4 w-4" /> {/* Placeholder for a school icon if available */}
-                <span>Skoleflyvning</span>
-              </div>
+    <div className="h-full w-full flex flex-col">
+      {/* Header with much larger text */}
+      <div className="flex flex-col md:flex-row md:items-center justify-between px-4 py-3 border-b bg-background space-y-2 md:space-y-0">
+        <div className="flex flex-col space-y-2">
+          {/* Aircraft Info */}
+          <div className="flex items-center gap-3">
+            <span className="font-bold text-xl md:text-2xl">
+              {flightDetails?.registration || aircraftRegistrationDisplay}
+            </span>
+            {flightDetails?.planeType && (
+              <span className="text-lg text-muted-foreground">• {flightDetails.planeType}</span>
             )}
           </div>
-        )}
 
-        <div className="flex items-center justify-between">
-            <div className="text-sm text-muted-foreground">
-                {currentReplayPoint ? new Date(currentReplayPoint.timestamp).toLocaleTimeString('da-DK') : '--:--:--'} / {flightData.stats.endTime ? new Date(flightData.stats.endTime).toLocaleTimeString('da-DK') : '--:--:--'}
+          {/* Pilot & Time Info with FULL names */}
+          {flightDetails && (
+            <div className="flex flex-col lg:flex-row lg:items-center gap-2 lg:gap-6 text-base">
+              <div className="flex items-center gap-2">
+                <Users className="h-5 w-5 text-muted-foreground" />
+                <span className="font-medium">
+                  {flightDetails.pilot1Name || "N/A"}
+                  {flightDetails.pilot2Name && ` / ${flightDetails.pilot2Name}`}
+                </span>
+              </div>
+              <div className="flex items-center gap-2">
+                <CalendarDays className="h-5 w-5 text-muted-foreground" />
+                <span className="text-muted-foreground">
+                  {flightDetails.takeoffTime && new Date(flightDetails.takeoffTime).toLocaleTimeString('da-DK', { hour: '2-digit', minute: '2-digit' })}
+                  {flightDetails.landingTime && ` - ${new Date(flightDetails.landingTime).toLocaleTimeString('da-DK', { hour: '2-digit', minute: '2-digit' })}`}
+                </span>
+              </div>
             </div>
-        </div>
-        <Slider
-            value={[replayProgress]}
-            min={0}
-            max={100}
-            step={0.1}
-            onValueChange={(value) => handleSeek(value[0])}
-            className="my-3"
-        />
-        <div className="flex items-center justify-center gap-3 mt-3">
-          <Button variant="ghost" size="lg" onClick={resetReplay} title="Genstart" className="p-3 h-16 w-16">
-            <RotateCcw className="h-8 w-8" />
-          </Button>
-          {replayStatus === "playing" ? (
-            <Button variant="outline" size="lg" onClick={pauseReplay} title="Pause" className="p-3 h-16 w-16">
-              <Pause className="h-8 w-8" />
-            </Button>
-          ) : (
-            <Button variant="outline" size="lg" onClick={startReplay} title="Afspil" disabled={replayStatus === 'ended'} className="p-3 h-16 w-16">
-              <Play className="h-8 w-8" />
-            </Button>
           )}
-          <div className="flex items-center gap-2 ml-2">
-            {[1, 2, 4, 8, 12].map((speed: number) => (
-              <Button 
-                key={speed} 
-                variant={replaySpeed === speed ? "secondary" : "ghost"} 
-                size="lg"
-                onClick={() => setReplaySpeed(speed)}
-                className="px-4 py-2 h-14 text-lg"
-              >
-                {speed}x
-              </Button>
-            ))}
+        </div>
+
+        {/* Actions with proper spacing */}
+        <div className="flex items-center gap-3 md:mr-16">
+          <Button
+            variant={isFollowing ? "secondary" : "outline"}
+            size="lg"
+            onClick={() => setIsFollowing(!isFollowing)}
+            className="h-12 px-4 text-base"
+            title={isFollowing ? "Stop med at følge" : "Følg fly"}
+          >
+            <LocateFixedIcon className={`h-5 w-5 mr-2 ${isFollowing ? 'text-primary' : ''}`} />
+            {isFollowing ? "Følger" : "Følg"}
+          </Button>
+          <Button
+            variant="outline"
+            size="lg"
+            onClick={handleDownloadIGC}
+            className="h-12 px-4 text-base"
+            title="Download IGC fil"
+          >
+            <Download className="h-5 w-5 mr-2" />
+            Download IGC
+          </Button>
+        </div>
+      </div>
+
+      {/* Map Container - Reduced height */}
+      <div className="flex-1 relative max-h-[50vh] md:max-h-[55vh]">
+        <MapContainer
+          ref={map => { if (map) mapRef.current = map; }}
+          center={trackPoints.length > 0 ? [trackPoints[0].latitude, trackPoints[0].longitude] : [55.5, 10.5]}
+          zoom={trackPoints.length > 0 ? 13 : 7}
+          style={{ height: "100%", width: "100%" }}
+          zoomControl={false}
+        >
+          <TileLayer
+            attribution='&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors'
+            url="https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png"
+          />
+          <ZoomControl position="topright" />
+          <MapInteractionEvents />
+          {pathSegments.map((segment, index) => (
+            <Polyline
+              key={index}
+              positions={segment.points as L.LatLngExpression[]}
+              pathOptions={{ color: segment.color, weight: 4, opacity: 0.8 }}
+            />
+          ))}
+          {currentReplayPoint && (
+            <Marker
+              position={[currentReplayPoint.latitude, currentReplayPoint.longitude]}
+              icon={replayAircraftIcon}
+            />
+          )}
+        </MapContainer>
+
+        {/* Stats Overlay */}
+        {currentReplayPoint && (
+          <div className="absolute top-4 left-4 bg-background/95 backdrop-blur-sm rounded-lg p-4 shadow-lg z-[400]">
+            <div className="grid grid-cols-2 gap-x-6 gap-y-2 text-base">
+              <div className="flex flex-col">
+                <div className="flex items-center gap-2">
+                  <ArrowUp className="h-5 w-5 text-blue-500" />
+                  {currentReplayPoint.altitude_agl !== null ? (
+                    <span className="font-bold text-lg">{currentReplayPoint.altitude_agl.toFixed(0)}m AGL</span>
+                  ) : (
+                    <span className="font-bold text-lg">{currentReplayPoint.altitude?.toFixed(0) ?? '0'}m MSL</span>
+                  )}
+                </div>
+                {currentReplayPoint.altitude_agl !== null && currentReplayPoint.altitude !== null && (
+                  <div className="text-sm text-muted-foreground ml-7">
+                    {currentReplayPoint.altitude.toFixed(0)}m MSL
+                  </div>
+                )}
+              </div>
+              <div className="flex items-center gap-2">
+                <WindIcon className="h-5 w-5 text-green-500" />
+                <span className="font-bold text-lg">{currentReplayPoint.ground_speed ? (currentReplayPoint.ground_speed * 1.852).toFixed(0) : '0'}km/t</span>
+              </div>
+              <div className="flex items-center gap-2">
+                <Compass className="h-5 w-5 text-purple-500" />
+                <span className="font-bold text-lg">{currentReplayPoint.track?.toFixed(0) ?? '0'}°</span>
+              </div>
+              <div className="flex items-center gap-2">
+                {currentReplayPoint.climb_rate && currentReplayPoint.climb_rate > 0.2 ? (
+                  <TrendingUp className="h-5 w-5 text-emerald-500" />
+                ) : currentReplayPoint.climb_rate && currentReplayPoint.climb_rate < -0.2 ? (
+                  <TrendingDown className="h-5 w-5 text-red-500" />
+                ) : (
+                  <Minus className="h-5 w-5 text-gray-400" />
+                )}
+                <span className="font-bold text-lg">{currentReplayPoint.climb_rate?.toFixed(1) ?? '0.0'}m/s</span>
+              </div>
+            </div>
+          </div>
+        )}
+      </div>
+
+      {/* Altitude Profile Section */}
+      <div className="border-t bg-muted/30">
+        <div className="p-3">
+          <div className="text-sm font-medium text-muted-foreground mb-2">Højdeprofil</div>
+          <div className="h-32 md:h-40 bg-background rounded-lg border">
+            <AltitudeProfile
+              trackPoints={trackPoints}
+              currentIndex={currentPointIndex}
+              onSeek={handleSeekToIndex}
+            />
           </div>
         </div>
-        {currentReplayPoint && (
-            <div className="grid grid-cols-4 gap-x-2 gap-y-2 mt-2 text-center">
-                <div className="flex flex-col items-center">
-                    <ArrowUp className="h-5 w-5 mb-0.5 text-blue-500" />
-                    <span className="text-base font-semibold">{currentReplayPoint.altitude?.toFixed(0) ?? 'N/A'} m</span>
-                    <span className="text-xs text-muted-foreground">Højde</span>
-                </div>
-                <div className="flex flex-col items-center">
-                    <WindIcon className="h-5 w-5 mb-0.5 text-green-500" />
-                    <span className="text-base font-semibold">{currentReplayPoint.ground_speed ? (currentReplayPoint.ground_speed * 1.852).toFixed(0) : 'N/A'} km/t</span>
-                    <span className="text-xs text-muted-foreground">Ground speed</span>
-                </div>
-                <div className="flex flex-col items-center">
-                    <Compass className="h-5 w-5 mb-0.5 text-purple-500" />
-                    <span className="text-base font-semibold">{currentReplayPoint.track?.toFixed(0) ?? 'N/A'}°</span>
-                    <span className="text-xs text-muted-foreground">Kurs</span>
-                </div>
-                <div className="flex flex-col items-center">
-                    {currentReplayPoint.climb_rate && currentReplayPoint.climb_rate > 0.2 ? (
-                        <TrendingUp className="h-5 w-5 mb-0.5 text-emerald-500" />
-                    ) : currentReplayPoint.climb_rate && currentReplayPoint.climb_rate < -0.2 ? (
-                        <TrendingDown className="h-5 w-5 mb-0.5 text-red-500" />
-                    ) : (
-                        <Minus className="h-5 w-5 mb-0.5 text-gray-400" /> 
-                    )}
-                    <span className="text-base font-semibold">{currentReplayPoint.climb_rate?.toFixed(1) ?? 'N/A'} m/s</span>
-                    <span className="text-xs text-muted-foreground">Stig/Fald</span>
-                </div>
+      </div>
+
+      {/* Bottom Controls */}
+      <div className="border-t bg-background">
+        <div className="px-4 py-3 space-y-3">
+          {/* Timeline */}
+          <div className="flex items-center gap-3">
+            <span className="text-base text-muted-foreground min-w-[70px] font-mono">
+              {currentReplayPoint ? new Date(currentReplayPoint.timestamp).toLocaleTimeString('da-DK', { hour: '2-digit', minute: '2-digit', second: '2-digit' }) : '--:--:--'}
+            </span>
+            <Slider
+              value={[replayProgress]}
+              min={0}
+              max={100}
+              step={0.1}
+              onValueChange={(value) => handleSeek(value[0])}
+              className="flex-1"
+            />
+            <span className="text-base text-muted-foreground min-w-[70px] text-right font-mono">
+              {flightData.stats.endTime ? new Date(flightData.stats.endTime).toLocaleTimeString('da-DK', { hour: '2-digit', minute: '2-digit', second: '2-digit' }) : '--:--:--'}
+            </span>
+          </div>
+
+          {/* Playback Controls */}
+          <div className="flex items-center justify-center gap-4">
+            <Button variant="outline" size="lg" onClick={resetReplay} className="h-12 w-12">
+              <RotateCcw className="h-6 w-6" />
+            </Button>
+            {replayStatus === "playing" ? (
+              <Button variant="default" size="lg" onClick={pauseReplay} className="h-14 w-14">
+                <Pause className="h-8 w-8" />
+              </Button>
+            ) : (
+              <Button variant="default" size="lg" onClick={startReplay} disabled={replayStatus === 'ended'} className="h-14 w-14">
+                <Play className="h-8 w-8" />
+              </Button>
+            )}
+            <div className="flex items-center gap-2 ml-4">
+              {[1, 2, 4, 8].map((speed: number) => (
+                <Button
+                  key={speed}
+                  variant={replaySpeed === speed ? "secondary" : "outline"}
+                  size="lg"
+                  onClick={() => setReplaySpeed(speed)}
+                  className="h-10 px-4 text-base"
+                >
+                  {speed}x
+                </Button>
+              ))}
             </div>
-        )}
+          </div>
+        </div>
       </div>
     </div>
   );
@@ -415,9 +602,8 @@ export function StatisticsReplayMap({ flightLogbookId, aircraftRegistration, onC
   const [flightData, setFlightData] = useState<FlightTrackDataResponse | null>(null);
 
   useEffect(() => {
-    // Moved from top-level to ensure it only runs on the client
     setLeafletIcons();
-  }, []); // Empty dependency array: run once on mount
+  }, []);
 
   useEffect(() => {
     if (!flightLogbookId) return;
@@ -445,39 +631,39 @@ export function StatisticsReplayMap({ flightLogbookId, aircraftRegistration, onC
 
   return (
     <Dialog open={true} onOpenChange={(open) => !open && onClose()}>
-      <DialogContent className="max-w-5xl p-0" onEscapeKeyDown={onClose}>
-        <DialogClose asChild className="absolute right-3 top-3 z-50">
-          <Button variant="ghost" size="icon" aria-label="Luk">
-            <X className="h-5 w-5" />
+      <DialogContent className="max-w-7xl w-full h-[100vh] md:h-[95vh] md:w-[98vw] lg:w-[95vw] p-0 rounded-none md:rounded-lg overflow-hidden" onEscapeKeyDown={onClose}>
+        <DialogClose className="absolute right-4 top-4 z-[500] bg-background/90 backdrop-blur-sm rounded-lg p-1 hover:bg-background shadow-lg">
+          <Button variant="ghost" size="icon" aria-label="Luk" className="h-10 w-10">
+            <X className="h-6 w-6" />
           </Button>
         </DialogClose>
 
         {isLoading && (
           <div className="h-[75vh] flex flex-col items-center justify-center">
             <Loader2 className="h-12 w-12 animate-spin text-primary mb-4" />
-            <p className="text-lg">Indlæser flyrute...</p>
+            <p className="text-xl">Indlæser flyrute...</p>
           </div>
         )}
         {error && (
           <div className="h-[75vh] flex flex-col items-center justify-center p-8 text-center">
             <AlertTriangle className="h-12 w-12 text-destructive mb-4" />
-            <p className="text-lg font-semibold text-destructive">Fejl ved indlæsning af data</p>
-            <p className="text-sm text-muted-foreground mt-1">{error}</p>
-            <Button onClick={onClose} variant="outline" className="mt-6">Luk</Button>
+            <p className="text-xl font-semibold text-destructive">Fejl ved indlæsning af data</p>
+            <p className="text-base text-muted-foreground mt-1">{error}</p>
+            <Button onClick={onClose} variant="outline" className="mt-6 text-lg px-6 py-3">Luk</Button>
           </div>
         )}
         {!isLoading && !error && flightData && (
-          <ReplayMapCore 
-            flightData={flightData} 
-            aircraftRegistrationDisplay={aircraftRegistration} 
+          <ReplayMapCore
+            flightData={flightData}
+            aircraftRegistrationDisplay={aircraftRegistration}
             flightLogbookId={flightLogbookId}
           />
         )}
          {!isLoading && !error && !flightData && (
             <div className="h-[75vh] flex flex-col items-center justify-center">
                 <MapPin className="h-12 w-12 text-muted-foreground mb-4" />
-                <p className="text-lg">Ingen data fundet for denne flyvning.</p>
-                <Button onClick={onClose} variant="outline" className="mt-6">Luk</Button>
+                <p className="text-xl">Ingen data fundet for denne flyvning.</p>
+                <Button onClick={onClose} variant="outline" className="mt-6 text-lg px-6 py-3">Luk</Button>
             </div>
         )}
       </DialogContent>

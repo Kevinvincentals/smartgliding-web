@@ -6,7 +6,8 @@
       "Bash(npm run build:*)",
       "Bash(ls:*)",
       "Bash(touch:*)",
-      "Bash(git log:*)"
+      "Bash(git log:*)",
+      "Bash(npx prisma generate:*)"
     ],
     "deny": []
   }

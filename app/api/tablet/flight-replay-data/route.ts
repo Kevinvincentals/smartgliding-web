@@ -22,7 +22,8 @@ interface FlightTrackPoint {
   aircraft_id: string;
   latitude: number;
   longitude: number;
-  altitude: number | null;
+  altitude: number | null; // MSL altitude in meters
+  altitude_agl: number | null; // AGL altitude in meters
   track: number | null;
   ground_speed: number | null; // Speed in knots
   climb_rate: number | null; // m/s
@@ -31,8 +32,11 @@ interface FlightTrackPoint {
 }
 
 interface FlightStats {
-  minAltitude: number | null;
-  maxAltitude: number | null;
+  minAltitude: number | null; // MSL
+  maxAltitude: number | null; // MSL
+  minAltitudeAgl: number | null; // AGL
+  maxAltitudeAgl: number | null; // AGL
+  airfieldElevation: number | null; // MSL in meters
   maxSpeed: number | null;    // Speed in knots
   flightDuration: number;   // in minutes
   startTime: string | null; // ISO string
@@ -61,6 +65,9 @@ interface FlightTrackDataResponse extends ApiResponse {
 const initialStats: FlightStats = {
   minAltitude: null,
   maxAltitude: null,
+  minAltitudeAgl: null,
+  maxAltitudeAgl: null,
+  airfieldElevation: null,
   maxSpeed: null,
   flightDuration: 0,
   startTime: null,
@@ -102,6 +109,21 @@ export async function GET(request: NextRequest): Promise<NextResponse<FlightTrac
         plane: { select: { registration_id: true, type: true } },
       }
     });
+
+    // Get airfield elevation for AGL calculations
+    let airfieldElevation: number | null = null;
+    if (flightLogbookEntry?.takeoff_airfield) {
+      const airfield = await prisma.dkAirfields.findFirst({
+        where: {
+          OR: [
+            { ident: flightLogbookEntry.takeoff_airfield },
+            { icao: flightLogbookEntry.takeoff_airfield }
+          ]
+        },
+        select: { alt_over_sea: true }
+      });
+      airfieldElevation = airfield?.alt_over_sea || null;
+    }
 
     let flightDetails: FlightLogbookDetails | null = null;
     if (flightLogbookEntry) {
@@ -167,6 +189,8 @@ export async function GET(request: NextRequest): Promise<NextResponse<FlightTrac
 
     let minAltitudeVal: number | null = null;
     let maxAltitudeVal: number | null = null;
+    let minAltitudeAglVal: number | null = null;
+    let maxAltitudeAglVal: number | null = null;
     let maxSpeedVal: number | null = null;
     let minTimestampVal: Date | null = null;
     let maxTimestampVal: Date | null = null;
@@ -174,9 +198,19 @@ export async function GET(request: NextRequest): Promise<NextResponse<FlightTrac
     const serializedData = flarmDataDocuments.map((point: FlarmDataPoint): FlightTrackPoint => {
       const currentTimestamp = new Date(point.timestamp.$date);
 
+      // Calculate both MSL and AGL altitudes
+      let altitudeAgl: number | null = null;
       if (point.altitude !== null && typeof point.altitude === 'number') {
+        // MSL altitude tracking
         minAltitudeVal = minAltitudeVal === null ? point.altitude : Math.min(minAltitudeVal, point.altitude);
         maxAltitudeVal = maxAltitudeVal === null ? point.altitude : Math.max(maxAltitudeVal, point.altitude);
+
+        // AGL altitude calculation
+        if (airfieldElevation !== null) {
+          altitudeAgl = point.altitude - airfieldElevation;
+          minAltitudeAglVal = minAltitudeAglVal === null ? altitudeAgl : Math.min(minAltitudeAglVal, altitudeAgl);
+          maxAltitudeAglVal = maxAltitudeAglVal === null ? altitudeAgl : Math.max(maxAltitudeAglVal, altitudeAgl);
+        }
       }
       
       if (point.ground_speed !== null && typeof point.ground_speed === 'number') {
@@ -193,10 +227,11 @@ export async function GET(request: NextRequest): Promise<NextResponse<FlightTrac
         aircraft_id: point.aircraft_id,
         latitude: point.latitude,
         longitude: point.longitude,
-        altitude: point.altitude,
+        altitude: point.altitude, // MSL
+        altitude_agl: altitudeAgl, // AGL
         track: point.track,
         ground_speed: point.ground_speed,
-        climb_rate: point.climb_rate, 
+        climb_rate: point.climb_rate,
         turn_rate: point.turn_rate,
         timestamp: currentTimestamp.toISOString(),
       };
@@ -214,6 +249,9 @@ export async function GET(request: NextRequest): Promise<NextResponse<FlightTrac
       stats: {
         minAltitude: minAltitudeVal !== null ? parseFloat((minAltitudeVal as number).toFixed(1)) : null,
         maxAltitude: maxAltitudeVal !== null ? parseFloat((maxAltitudeVal as number).toFixed(1)) : null,
+        minAltitudeAgl: minAltitudeAglVal !== null ? parseFloat((minAltitudeAglVal as number).toFixed(1)) : null,
+        maxAltitudeAgl: maxAltitudeAglVal !== null ? parseFloat((maxAltitudeAglVal as number).toFixed(1)) : null,
+        airfieldElevation,
         maxSpeed: maxSpeedVal !== null ? parseFloat((maxSpeedVal as number).toFixed(1)) : null,
         flightDuration,
         startTime: minTimestampVal ? (minTimestampVal as Date).toISOString() : null,

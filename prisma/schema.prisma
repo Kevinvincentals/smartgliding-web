@@ -297,6 +297,7 @@ model DkAirfields {
   icao          String // ICAO code
   latitude_deg  Float // Latitude in degrees
   longitude_deg Float // Longitude in degrees
+  alt_over_sea  Int? // Altitude above sea level in meters (MSL)
   createdAt     DateTime @default(now())
   updatedAt     DateTime @updatedAt
 
