@@ -209,14 +209,14 @@ export function AddPilotSheet({ isOpen, onClose, onAdd }: AddPilotSheetProps) {
 
   return (
     <Sheet open={isOpen} onOpenChange={handleClose}>
-      <SheetContent className="w-[500px] sm:w-[600px] lg:w-[700px]">
-        <SheetHeader>
+      <SheetContent className="w-[500px] sm:w-[600px] lg:w-[700px] flex flex-col h-full overflow-hidden">
+        <SheetHeader className="flex-shrink-0 pb-4">
           <SheetTitle className="flex items-center">
             <UserPlus className="h-5 w-5 mr-2" />
             {step === 'search' ? 'Søg Efter Pilot' : 'Opret Ny Pilot'}
           </SheetTitle>
           <SheetDescription>
-            {step === 'search' 
+            {step === 'search'
               ? 'Søg efter eksisterende piloter eller opret en ny pilot.'
               : 'Udfyld informationer for den nye pilot.'
             }
@@ -224,7 +224,9 @@ export function AddPilotSheet({ isOpen, onClose, onAdd }: AddPilotSheetProps) {
         </SheetHeader>
 
         {step === 'search' ? (
-          <div className="space-y-6 mt-6">
+          <>
+          <div className="flex-1 overflow-y-auto pr-2">
+            <div className="space-y-6">
             {/* Search Form */}
             <form onSubmit={handleSearch} className="space-y-4">
               <div className="space-y-2">
@@ -290,8 +292,12 @@ export function AddPilotSheet({ isOpen, onClose, onAdd }: AddPilotSheetProps) {
               </div>
             )}
 
-            {/* Action Buttons */}
-            <div className="flex justify-end space-x-2 pt-4">
+            </div>
+          </div>
+
+          {/* Action Buttons - Fixed at bottom */}
+          <div className="flex-shrink-0 border-t pt-4 mt-4">
+            <div className="flex justify-end space-x-2">
               <Button type="button" variant="outline" onClick={handleClose}>
                 <X className="h-4 w-4 mr-2" />
                 Annuller
@@ -304,8 +310,10 @@ export function AddPilotSheet({ isOpen, onClose, onAdd }: AddPilotSheetProps) {
               )}
             </div>
           </div>
+          </>
         ) : (
-          <form onSubmit={handleCreateNewPilot} className="space-y-6 mt-6">
+          <>
+          <form id="add-pilot-form" onSubmit={handleCreateNewPilot} className="flex-1 overflow-y-auto pr-2 space-y-6">
           {/* Basic Information */}
           <div className="space-y-4">
             <h3 className="text-lg font-medium">Grundlæggende oplysninger</h3>
@@ -427,8 +435,11 @@ export function AddPilotSheet({ isOpen, onClose, onAdd }: AddPilotSheetProps) {
             </div>
           </div>
 
-          {/* Action Buttons */}
-          <div className="flex flex-col gap-4 pt-6 border-t">
+        </form>
+
+        {/* Action Buttons - Fixed at bottom */}
+        <div className="flex-shrink-0 border-t pt-4 mt-4">
+          <div className="flex flex-col gap-3">
             <div className="flex justify-start">
               <Button type="button" variant="ghost" onClick={() => setStep('search')} className="text-muted-foreground hover:text-foreground">
                 <ArrowRight className="h-4 w-4 mr-2 rotate-180" />
@@ -440,13 +451,14 @@ export function AddPilotSheet({ isOpen, onClose, onAdd }: AddPilotSheetProps) {
                 <X className="h-4 w-4 mr-2" />
                 Annuller
               </Button>
-              <Button type="submit" disabled={isLoading}>
+              <Button form="add-pilot-form" type="submit" disabled={isLoading}>
                 <Save className="h-4 w-4 mr-2" />
                 {isLoading ? "Opretter..." : "Opret Pilot"}
               </Button>
             </div>
           </div>
-        </form>
+        </div>
+        </>
         )}
       </SheetContent>
     </Sheet>

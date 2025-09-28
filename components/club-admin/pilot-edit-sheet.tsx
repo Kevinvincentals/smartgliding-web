@@ -167,8 +167,8 @@ export function PilotEditSheet({ pilot, isOpen, onClose, onUpdate }: PilotEditSh
 
   return (
     <Sheet open={isOpen} onOpenChange={onClose}>
-      <SheetContent className="w-[400px] sm:w-[540px]">
-        <SheetHeader>
+      <SheetContent className="w-[400px] sm:w-[540px] flex flex-col h-full overflow-hidden">
+        <SheetHeader className="flex-shrink-0 pb-4">
           <SheetTitle className="flex items-center">
             <User className="h-5 w-5 mr-2" />
             Rediger Pilot
@@ -178,7 +178,7 @@ export function PilotEditSheet({ pilot, isOpen, onClose, onUpdate }: PilotEditSh
           </SheetDescription>
         </SheetHeader>
 
-        <form onSubmit={handleSubmit} className="space-y-6 mt-6">
+        <form id="pilot-edit-form" onSubmit={handleSubmit} className="flex-1 overflow-y-auto space-y-6 pr-2">
           {/* Basic Information */}
           <div className="space-y-4">
             <h3 className="text-lg font-medium">Grundlæggende oplysninger</h3>
@@ -314,18 +314,21 @@ export function PilotEditSheet({ pilot, isOpen, onClose, onUpdate }: PilotEditSh
             </div>
           </div>
 
-          {/* Action Buttons */}
-          <div className="flex justify-end space-x-2 pt-4">
+        </form>
+
+        {/* Action Buttons - Fixed at bottom */}
+        <div className="flex-shrink-0 border-t pt-4 mt-4">
+          <div className="flex justify-end space-x-2">
             <Button type="button" variant="outline" onClick={onClose} disabled={isLoading}>
               <X className="h-4 w-4 mr-2" />
               Annuller
             </Button>
-            <Button type="submit" disabled={isLoading}>
+            <Button form="pilot-edit-form" type="submit" disabled={isLoading}>
               <Save className="h-4 w-4 mr-2" />
               {isLoading ? "Gemmer..." : "Gem ændringer"}
             </Button>
           </div>
-        </form>
+        </div>
       </SheetContent>
     </Sheet>
   )
