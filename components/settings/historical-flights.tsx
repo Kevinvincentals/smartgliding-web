@@ -47,6 +47,7 @@ export function HistoricalFlights({ isLoading = false }: HistoricalFlightsProps)
   const [timeEditType, setTimeEditType] = useState<"start" | "end">("start");
   const [timeEditFlightId, setTimeEditFlightId] = useState<number | null>(null);
   const { toast } = useToast();
+  const [datesWithFlights, setDatesWithFlights] = useState<Date[]>([]);
   
   // Mock FLARM status since WebSocket is not available for historical data
   const [flarmStatuses] = useState<FlarmStatuses>({});
@@ -201,6 +202,29 @@ export function HistoricalFlights({ isLoading = false }: HistoricalFlightsProps)
 
     fetchAirfields();
   }, []);
+
+  // Fetch dates with flight activity for the current month
+  useEffect(() => {
+    const fetchFlightActivityDates = async () => {
+      try {
+        const year = selectedDate.getFullYear();
+        const month = selectedDate.getMonth() + 1; // 1-12
+
+        const response = await fetch(`/api/tablet/flight_activity_dates?year=${year}&month=${month}`);
+        const data = await response.json();
+
+        if (data.success && data.dates) {
+          // Convert date strings to Date objects
+          const dates = data.dates.map((dateStr: string) => new Date(dateStr + 'T12:00:00'));
+          setDatesWithFlights(dates);
+        }
+      } catch (error) {
+        console.error('Failed to fetch flight activity dates:', error);
+      }
+    };
+
+    fetchFlightActivityDates();
+  }, [selectedDate.getFullYear(), selectedDate.getMonth()]);
 
   // Fetch flights for the selected date
   const fetchFlightsForDate = async (date: Date) => {
@@ -707,6 +731,12 @@ export function HistoricalFlights({ isLoading = false }: HistoricalFlightsProps)
                     locale={da}
                     className="rounded-md border shadow-md"
                     disabled={(date) => date > new Date()} // Disable future dates
+                    modifiers={{
+                      hasFlights: datesWithFlights
+                    }}
+                    modifiersClassNames={{
+                      hasFlights: "font-semibold relative after:content-[''] after:absolute after:bottom-1 after:left-1/2 after:-translate-x-1/2 after:h-1 after:w-1 after:rounded-full after:bg-primary"
+                    }}
                   />
                 </PopoverContent>
               </Popover>

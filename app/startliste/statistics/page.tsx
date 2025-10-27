@@ -157,6 +157,7 @@ function Statistics({ socket, wsConnected, authenticatedChannel }: StatisticsPro
   const [calendarOpen, setCalendarOpen] = useState(false)
   const [selectedFlightForReplay, setSelectedFlightForReplay] = useState<{ id: string; registration: string } | null>(null)
   const [selectedPilotForDetails, setSelectedPilotForDetails] = useState<PilotStat | null>(null)
+  const [datesWithFlights, setDatesWithFlights] = useState<Date[]>([])
   
   // Search and filter states
   const [pilotSearchTerm, setPilotSearchTerm] = useState("")
@@ -315,6 +316,29 @@ function Statistics({ socket, wsConnected, authenticatedChannel }: StatisticsPro
       setCalendarOpen(false);
     }
   };
+
+  // Fetch dates with flight activity for the current month
+  useEffect(() => {
+    const fetchFlightActivityDates = async () => {
+      try {
+        const year = selectedDate.getFullYear();
+        const month = selectedDate.getMonth() + 1; // 1-12
+
+        const response = await fetch(`/api/tablet/flight_activity_dates?year=${year}&month=${month}`);
+        const data = await response.json();
+
+        if (data.success && data.dates) {
+          // Convert date strings to Date objects
+          const dates = data.dates.map((dateStr: string) => new Date(dateStr + 'T12:00:00'));
+          setDatesWithFlights(dates);
+        }
+      } catch (error) {
+        console.error('Failed to fetch flight activity dates:', error);
+      }
+    };
+
+    fetchFlightActivityDates();
+  }, [selectedDate.getFullYear(), selectedDate.getMonth()]);
   
   // Format date
   const formatDate = (dateString: string) => {
@@ -542,10 +566,12 @@ function Statistics({ socket, wsConnected, authenticatedChannel }: StatisticsPro
                           weekend: (date) => {
                             const day = date.getDay();
                             return day === 0 || day === 6; // 0 is Sunday, 6 is Saturday
-                          }
+                          },
+                          hasFlights: datesWithFlights
                         }}
                         modifiersClassNames={{
-                          weekend: "bg-muted/50 text-muted-foreground"
+                          weekend: "bg-muted/50 text-muted-foreground",
+                          hasFlights: "font-semibold relative after:content-[''] after:absolute after:bottom-1 after:left-1/2 after:-translate-x-1/2 after:h-1 after:w-1 after:rounded-full after:bg-primary"
                         }}
                       />
                     </PopoverContent>
