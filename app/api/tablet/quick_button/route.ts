@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { prisma } from '@/lib/prisma';
 import { broadcastToClients } from '@/lib/websocket/utils';
-import { localTimeStringToUTC } from '@/lib/time-utils';
+import { localTimeStringToUTC, getCurrentTimeAsUTC } from '@/lib/time-utils';
 import { calculateFlightStatistics } from '@/lib/flight-stats';
 import { quickButtonActionSchema, validateRequestBody } from '@/lib/validations/tablet-api';
 import type { ApiResponse } from '@/types/tablet-api';
@@ -64,12 +64,12 @@ export async function POST(request: NextRequest): Promise<NextResponse<QuickButt
       );
     }
 
-    // Get current time
-    const now = new Date();
-    
+    // Get current time in configured timezone (properly converted to UTC)
+    const now = getCurrentTimeAsUTC();
+
     // Prepare update data based on action
     const updateData: any = {};
-    
+
     if (action === 'start') {
       updateData.takeoff_time = now;
       updateData.status = 'INFLIGHT'; // Update status to INFLIGHT

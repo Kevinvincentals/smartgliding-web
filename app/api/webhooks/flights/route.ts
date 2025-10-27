@@ -4,7 +4,7 @@ import { z } from 'zod';
 import { getGliderByFlarmId } from '@/lib/flightLogbook';
 import { broadcastToClients } from '@/lib/websocket/utils';
 import { calculateFlightStatistics } from '@/lib/flight-stats';
-import { getStartOfTimezoneDayUTC } from '@/lib/time-utils';
+import { getStartOfTimezoneDayUTC, getCurrentTimeAsUTC } from '@/lib/time-utils';
 
 // Define status constants for our internal use
 const FLIGHT_STATUS = {
@@ -263,7 +263,8 @@ async function handleFlightEvent(payload: z.infer<typeof flightEventSchema>) {
     }
   }
 
-  const now = new Date();
+  // Get current time in configured timezone (properly converted to UTC)
+  const now = getCurrentTimeAsUTC();
 
   // For takeoff events (takeoff and udtakeoff)
   if (type === 'takeoff' || type === 'udtakeoff') {

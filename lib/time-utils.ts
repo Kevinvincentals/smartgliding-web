@@ -13,22 +13,50 @@ const TIMEZONE = process.env.TIMEZONE || 'Europe/Copenhagen';
 
 /**
  * Determine if the current date is in summer time (CEST) or winter time (CET)
+ * Uses Intl.DateTimeFormat to properly detect DST transitions
  * @returns Hours offset from UTC (2 for summer CEST, 1 for winter CET)
  */
 export function getCurrentTimezoneOffset(): number {
-  // Check if we're in summer time (CEST, UTC+2) or winter time (CET, UTC+1)
+  // Use Intl.DateTimeFormat to get the actual timezone offset
+  // This properly handles DST transitions (last Sunday of March/October for Europe)
   const now = new Date();
-  
-  // Get current month (0-11)
-  const month = now.getMonth();
-  
-  // Simple summer time detection for European timezones:
-  // Summer time (CEST, UTC+2): March-October (months 2-9)
-  // Winter time (CET, UTC+1): November-February (months 10-1)
-  const isSummerTime = month >= 2 && month <= 9;
-  
-  // Return the hours offset from UTC
-  return isSummerTime ? 2 : 1;
+
+  // Get the timezone offset in minutes for the configured timezone
+  // We do this by formatting a date in both UTC and the target timezone,
+  // then comparing the hours to determine the offset
+  const formatter = new Intl.DateTimeFormat('en-US', {
+    timeZone: TIMEZONE,
+    hour: 'numeric',
+    hour12: false,
+    timeZoneName: 'shortOffset'
+  });
+
+  const parts = formatter.formatToParts(now);
+  const timeZoneOffset = parts.find(part => part.type === 'timeZoneName')?.value;
+
+  // Parse the offset (e.g., "GMT+1" or "GMT+2")
+  if (timeZoneOffset) {
+    const match = timeZoneOffset.match(/GMT([+-]\d+)/);
+    if (match) {
+      return Math.abs(parseInt(match[1]));
+    }
+  }
+
+  // Fallback: compare UTC hours with local hours
+  const utcHours = now.getUTCHours();
+  const localHours = parseInt(new Intl.DateTimeFormat('en-US', {
+    timeZone: TIMEZONE,
+    hour: 'numeric',
+    hour12: false
+  }).format(now));
+
+  let offset = localHours - utcHours;
+
+  // Handle day boundary crossing
+  if (offset > 12) offset -= 24;
+  if (offset < -12) offset += 24;
+
+  return Math.abs(offset);
 }
 
 /**
@@ -271,13 +299,13 @@ export function getStartOfTimezoneYearUTC(date: Date = new Date()): Date {
 /**
  * Gets the current date in the configured timezone
  * This is useful to avoid ambiguity around midnight when determining "today"
- * 
+ *
  * @returns Date object representing the current moment in the configured timezone
  */
 export function getCurrentTimezoneDate(): Date {
   // Create a new date representing the current moment in the configured timezone
   const now = new Date();
-  
+
   // Get the current local time components in the configured timezone
   const formatter = new Intl.DateTimeFormat('en-CA', {
     timeZone: TIMEZONE,
@@ -289,7 +317,7 @@ export function getCurrentTimezoneDate(): Date {
     second: '2-digit',
     hour12: false
   });
-  
+
   const parts = formatter.formatToParts(now);
   const year = parseInt(parts.find(part => part.type === 'year')!.value);
   const month = parseInt(parts.find(part => part.type === 'month')!.value);
@@ -297,10 +325,86 @@ export function getCurrentTimezoneDate(): Date {
   const hour = parseInt(parts.find(part => part.type === 'hour')!.value);
   const minute = parseInt(parts.find(part => part.type === 'minute')!.value);
   const second = parseInt(parts.find(part => part.type === 'second')!.value);
-  
+
   // Create a new Date object with these local time components
   // Note: This creates a Date as if these were UTC components, but they represent local time
   return new Date(year, month - 1, day, hour, minute, second);
+}
+
+/**
+ * Gets the current time in the configured timezone and returns it as a UTC Date object.
+ * This is the proper way to get "now" for storing in the database.
+ *
+ * The returned Date object stores the UTC time that corresponds to the current local time.
+ * For example, if it's 13:41 CET (UTC+1), this returns a Date representing 12:41 UTC.
+ *
+ * @returns Date object in UTC representing the current moment in the configured timezone
+ */
+export function getCurrentTimeAsUTC(): Date {
+  const now = new Date();
+
+  // Get the current local time components in the configured timezone
+  const formatter = new Intl.DateTimeFormat('en-CA', {
+    timeZone: TIMEZONE,
+    year: 'numeric',
+    month: '2-digit',
+    day: '2-digit',
+    hour: '2-digit',
+    minute: '2-digit',
+    second: '2-digit',
+    hour12: false
+  });
+
+  const parts = formatter.formatToParts(now);
+  const year = parseInt(parts.find(part => part.type === 'year')!.value);
+  const month = parseInt(parts.find(part => part.type === 'month')!.value);
+  const day = parseInt(parts.find(part => part.type === 'day')!.value);
+  const hour = parseInt(parts.find(part => part.type === 'hour')!.value);
+  const minute = parseInt(parts.find(part => part.type === 'minute')!.value);
+  const second = parseInt(parts.find(part => part.type === 'second')!.value);
+
+  // Get the timezone offset
+  const offsetHours = getCurrentTimezoneOffset();
+
+  // Calculate UTC time by subtracting the offset
+  let utcHours = hour - offsetHours;
+  let utcDay = day;
+  let utcMonth = month;
+  let utcYear = year;
+
+  // Handle day boundary crossing
+  if (utcHours < 0) {
+    utcHours += 24;
+    utcDay -= 1;
+
+    // Handle month boundary
+    if (utcDay < 1) {
+      utcMonth -= 1;
+      if (utcMonth < 1) {
+        utcMonth = 12;
+        utcYear -= 1;
+      }
+      // Get last day of previous month
+      utcDay = new Date(utcYear, utcMonth, 0).getDate();
+    }
+  } else if (utcHours >= 24) {
+    utcHours -= 24;
+    utcDay += 1;
+
+    // Handle month boundary
+    const daysInMonth = new Date(utcYear, utcMonth, 0).getDate();
+    if (utcDay > daysInMonth) {
+      utcDay = 1;
+      utcMonth += 1;
+      if (utcMonth > 12) {
+        utcMonth = 1;
+        utcYear += 1;
+      }
+    }
+  }
+
+  // Create a UTC Date object
+  return new Date(Date.UTC(utcYear, utcMonth - 1, utcDay, utcHours, minute, second));
 }
 
 // Legacy function names for backward compatibility
