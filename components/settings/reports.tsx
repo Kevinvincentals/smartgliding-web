@@ -1,6 +1,6 @@
 "use client"
 
-import { useState } from "react"
+import { useState, useEffect } from "react"
 import { Button } from "@/components/ui/button"
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
 import { FileDown, FileText, Loader2, User, Users, Calendar as CalendarIcon } from "lucide-react"
@@ -22,7 +22,30 @@ export function Reports({ isLoading = false, trafficLeader, towPerson }: Reports
   const [isGeneratingFlightList, setIsGeneratingFlightList] = useState(false)
   const [selectedDate, setSelectedDate] = useState<Date>(new Date())
   const [calendarOpen, setCalendarOpen] = useState(false)
-  
+  const [datesWithFlights, setDatesWithFlights] = useState<Date[]>([])
+
+  // Fetch dates with flight activity for the current year
+  useEffect(() => {
+    const fetchFlightActivityDates = async () => {
+      try {
+        const year = selectedDate.getFullYear();
+
+        const response = await fetch(`/api/tablet/flight_activity_dates?year=${year}`);
+        const data = await response.json();
+
+        if (data.success && data.dates) {
+          // Convert date strings to Date objects
+          const dates = data.dates.map((dateStr: string) => new Date(dateStr + 'T12:00:00'));
+          setDatesWithFlights(dates);
+        }
+      } catch (error) {
+        console.error('Failed to fetch flight activity dates:', error);
+      }
+    };
+
+    fetchFlightActivityDates();
+  }, [selectedDate.getFullYear()]);
+
   // Generate flight list PDF
   const handleGenerateFlightListPDF = async () => {
     setIsGeneratingFlightList(true)
@@ -131,6 +154,12 @@ export function Reports({ isLoading = false, trafficLeader, towPerson }: Reports
                   initialFocus
                   locale={da}
                   className="rounded-md border shadow-md"
+                  modifiers={{
+                    hasFlights: datesWithFlights
+                  }}
+                  modifiersClassNames={{
+                    hasFlights: "font-semibold relative after:content-[''] after:absolute after:bottom-1 after:left-1/2 after:-translate-x-1/2 after:h-1 after:w-1 after:rounded-full after:bg-primary"
+                  }}
                 />
               </PopoverContent>
             </Popover>
