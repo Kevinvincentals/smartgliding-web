@@ -317,14 +317,13 @@ function Statistics({ socket, wsConnected, authenticatedChannel }: StatisticsPro
     }
   };
 
-  // Fetch dates with flight activity for the current month
+  // Fetch dates with flight activity for the current year
   useEffect(() => {
     const fetchFlightActivityDates = async () => {
       try {
         const year = selectedDate.getFullYear();
-        const month = selectedDate.getMonth() + 1; // 1-12
 
-        const response = await fetch(`/api/tablet/flight_activity_dates?year=${year}&month=${month}`);
+        const response = await fetch(`/api/tablet/flight_activity_dates?year=${year}`);
         const data = await response.json();
 
         if (data.success && data.dates) {
@@ -338,7 +337,7 @@ function Statistics({ socket, wsConnected, authenticatedChannel }: StatisticsPro
     };
 
     fetchFlightActivityDates();
-  }, [selectedDate.getFullYear(), selectedDate.getMonth()]);
+  }, [selectedDate.getFullYear()]);
   
   // Format date
   const formatDate = (dateString: string) => {

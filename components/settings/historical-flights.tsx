@@ -203,14 +203,13 @@ export function HistoricalFlights({ isLoading = false }: HistoricalFlightsProps)
     fetchAirfields();
   }, []);
 
-  // Fetch dates with flight activity for the current month
+  // Fetch dates with flight activity for the current year
   useEffect(() => {
     const fetchFlightActivityDates = async () => {
       try {
         const year = selectedDate.getFullYear();
-        const month = selectedDate.getMonth() + 1; // 1-12
 
-        const response = await fetch(`/api/tablet/flight_activity_dates?year=${year}&month=${month}`);
+        const response = await fetch(`/api/tablet/flight_activity_dates?year=${year}`);
         const data = await response.json();
 
         if (data.success && data.dates) {
@@ -224,7 +223,7 @@ export function HistoricalFlights({ isLoading = false }: HistoricalFlightsProps)
     };
 
     fetchFlightActivityDates();
-  }, [selectedDate.getFullYear(), selectedDate.getMonth()]);
+  }, [selectedDate.getFullYear()]);
 
   // Fetch flights for the selected date
   const fetchFlightsForDate = async (date: Date) => {

@@ -3,8 +3,9 @@ import { prisma } from '@/lib/prisma';
 import { getStartOfTimezoneDayUTC, getEndOfTimezoneDayUTC } from '@/lib/time-utils';
 
 /**
- * API endpoint to fetch dates with flight activity for a given month
+ * API endpoint to fetch dates with flight activity for a given year
  * Used by calendars to show visual indicators on dates with flights
+ * Returns all dates in the year that have at least one flight
  */
 export async function GET(request: NextRequest) {
   try {
@@ -23,37 +24,35 @@ export async function GET(request: NextRequest) {
     // Get query parameters
     const { searchParams } = new URL(request.url);
     const yearParam = searchParams.get('year');
-    const monthParam = searchParams.get('month'); // 1-12
 
-    if (!yearParam || !monthParam) {
+    if (!yearParam) {
       return NextResponse.json(
-        { success: false, error: 'Year and month parameters are required' },
+        { success: false, error: 'Year parameter is required' },
         { status: 400 }
       );
     }
 
     const year = parseInt(yearParam);
-    const month = parseInt(monthParam); // 1-12
 
-    if (isNaN(year) || isNaN(month) || month < 1 || month > 12) {
+    if (isNaN(year)) {
       return NextResponse.json(
-        { success: false, error: 'Invalid year or month' },
+        { success: false, error: 'Invalid year' },
         { status: 400 }
       );
     }
 
-    // Calculate the start and end of the month in UTC
-    const startOfMonth = getStartOfTimezoneDayUTC(new Date(year, month - 1, 1));
-    const endOfMonth = getEndOfTimezoneDayUTC(new Date(year, month, 0)); // Day 0 of next month = last day of current month
+    // Calculate the start and end of the year in UTC
+    const startOfYear = getStartOfTimezoneDayUTC(new Date(year, 0, 1)); // January 1st
+    const endOfYear = getEndOfTimezoneDayUTC(new Date(year, 11, 31)); // December 31st
 
-    // Fetch all flights for the club in this month that have takeoff_time
+    // Fetch all flights for the club in this year that have takeoff_time
     const flights = await prisma.flightLogbook.findMany({
       where: {
         clubId,
         deleted: { not: true },
         takeoff_time: {
-          gte: startOfMonth,
-          lte: endOfMonth
+          gte: startOfYear,
+          lte: endOfYear
         }
       },
       select: {
