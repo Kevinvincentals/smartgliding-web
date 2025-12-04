@@ -612,6 +612,11 @@ function broadcastTrackedAircraftUpdate(message: any) {
 //   }
 // }
 
+// Next.js 16 requires at least one HTTP method handler
+export function GET() {
+  return new Response('WebSocket endpoint - upgrade required', { status: 426 });
+}
+
 export function SOCKET(
   client: WebSocket,
   request: IncomingMessage,

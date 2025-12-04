@@ -411,8 +411,8 @@ export async function GET(request: Request) {
     // Format date for the filename
     const formattedDate = date.toISOString().split('T')[0];
     
-    // Return the PDF buffer
-    return new NextResponse(buffer, {
+    // Return the PDF buffer (convert to Uint8Array for Next.js 16 compatibility)
+    return new NextResponse(new Uint8Array(buffer), {
       headers: {
         'Content-Type': 'application/pdf',
         'Content-Disposition': `attachment; filename="startliste-${formattedDate}.pdf"`
