@@ -5,8 +5,8 @@ NPM_CONFIG_PRODUCTION = 'false'
 
 [phases.setup]
 nixPkgs = [
-  'nodejs_18',
-  'npm-9_x',
+  'nodejs_22',
+  'npm-10_x',
   'openssl',
   'python3',
   'pkg-config',
