@@ -407,8 +407,34 @@ export function getCurrentTimeAsUTC(): Date {
   return new Date(Date.UTC(utcYear, utcMonth - 1, utcDay, utcHours, minute, second));
 }
 
+/**
+ * Gets the end of a given local year in the configured timezone, expressed as a UTC Date object.
+ * This will be December 31st, 23:59:59.999 local time of the year of the given date, expressed in UTC.
+ *
+ * @param date Optional Date object (defaults to current date/time). The year part of this date is used.
+ * @returns Date object representing the end of the local year in UTC.
+ */
+export function getEndOfTimezoneYearUTC(date: Date = new Date()): Date {
+  const offsetHours = getCurrentTimezoneOffset();
+
+  const formatter = new Intl.DateTimeFormat('en-CA', {
+    timeZone: TIMEZONE,
+    year: 'numeric',
+  });
+  const year = parseInt(formatter.formatToParts(date).find(part => part.type === 'year')!.value);
+
+  // Construct a new Date object in UTC for December 31st, 23:59:59.999 of the local year
+  const localEndOfYear = new Date(Date.UTC(year, 11, 31, 23, 59, 59, 999)); // Dec 31st 23:59:59.999 of local year, interpreted as UTC
+
+  // Subtract the timezone offset
+  const endOfYearUTC = new Date(localEndOfYear.getTime() - (offsetHours * 60 * 60 * 1000));
+
+  return endOfYearUTC;
+}
+
 // Legacy function names for backward compatibility
 export const getStartOfDanishDayUTC = getStartOfTimezoneDayUTC;
 export const getEndOfDanishDayUTC = getEndOfTimezoneDayUTC;
 export const getStartOfDanishYearUTC = getStartOfTimezoneYearUTC;
+export const getEndOfDanishYearUTC = getEndOfTimezoneYearUTC;
 export const getCurrentDanishDate = getCurrentTimezoneDate; 

@@ -1,9 +1,10 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { prisma } from '@/lib/prisma';
-import { 
-  getStartOfTimezoneDayUTC, 
-  getEndOfTimezoneDayUTC, 
+import {
+  getStartOfTimezoneDayUTC,
+  getEndOfTimezoneDayUTC,
   getStartOfTimezoneYearUTC,
+  getEndOfTimezoneYearUTC,
   formatUTCDateToLocalTime
 } from '@/lib/time-utils';
 import { JWTPayload } from '@/lib/jwt';
@@ -105,18 +106,28 @@ export async function GET(request: NextRequest): Promise<NextResponse<Statistics
     // Get the date range based on Danish local time, expressed in UTC
     const startOfTargetDate = getStartOfTimezoneDayUTC(targetDate);
     const endOfTargetDate = getEndOfTimezoneDayUTC(targetDate);
-    
+
     // Get start of year/month based on queryParams
     let startOfPeriod: Date;
+    let endOfPeriod: Date = endOfTargetDate; // Default to end of target date
+
     if (queryParams.year !== undefined) {
-      startOfPeriod = getStartOfTimezoneYearUTC(new Date(queryParams.year, 0, 1));
+      const yearDate = new Date(queryParams.year, 0, 1);
+      startOfPeriod = getStartOfTimezoneYearUTC(yearDate);
+      // For year view, set end of period to end of that year
+      endOfPeriod = getEndOfTimezoneYearUTC(yearDate);
       if (queryParams.month !== undefined) {
         startOfPeriod = getStartOfTimezoneDayUTC(new Date(queryParams.year, queryParams.month - 1, 1));
+        // For month view, set end of period to end of that month
+        const lastDayOfMonth = new Date(queryParams.year, queryParams.month, 0);
+        endOfPeriod = getEndOfTimezoneDayUTC(lastDayOfMonth);
       }
     } else if (period === 'year') {
       startOfPeriod = getStartOfTimezoneYearUTC(targetDate);
+      endOfPeriod = getEndOfTimezoneYearUTC(targetDate);
     } else {
       startOfPeriod = startOfTargetDate;
+      endOfPeriod = endOfTargetDate;
     }
 
     // Build the where clause based on requested period
@@ -155,14 +166,14 @@ export async function GET(request: NextRequest): Promise<NextResponse<Statistics
           {
             takeoff_time: {
               gte: startOfPeriod,
-              lte: endOfTargetDate
+              lte: endOfPeriod
             }
           },
           // Flights that landed in target period
           {
             landing_time: {
               gte: startOfPeriod,
-              lte: endOfTargetDate
+              lte: endOfPeriod
             }
           }
         ]

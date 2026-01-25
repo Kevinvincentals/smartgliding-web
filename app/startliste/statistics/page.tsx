@@ -17,6 +17,7 @@ import { Badge } from "@/components/ui/badge"
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover"
 import { Calendar } from "@/components/ui/calendar"
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
 import { format } from "date-fns"
 import { da } from "date-fns/locale"
 import { cn } from "@/lib/utils"
@@ -155,6 +156,7 @@ function Statistics({ socket, wsConnected, authenticatedChannel }: StatisticsPro
   const [activeTab, setActiveTab] = useState("summary")
   const [selectedDate, setSelectedDate] = useState<Date>(new Date())
   const [calendarOpen, setCalendarOpen] = useState(false)
+  const [selectedYear, setSelectedYear] = useState<number>(new Date().getFullYear())
   const [selectedFlightForReplay, setSelectedFlightForReplay] = useState<{ id: string; registration: string } | null>(null)
   const [selectedPilotForDetails, setSelectedPilotForDetails] = useState<PilotStat | null>(null)
   const [datesWithFlights, setDatesWithFlights] = useState<Date[]>([])
@@ -190,32 +192,35 @@ function Statistics({ socket, wsConnected, authenticatedChannel }: StatisticsPro
   }
   
   // Fetch statistics data for a specific date or period
-  const fetchStatistics = async (date: Date, period: "today" | "year") => {
+  const fetchStatistics = async (date: Date, period: "today" | "year", year?: number) => {
     const isToday = period === "today";
-    
+
     if (isToday) {
       setIsLoading(true);
     } else {
       setIsLoadingYear(true);
     }
-    
+
     setError(null);
-    
+
     try {
       // Format the date in YYYY-MM-DD for the API
       const formattedDate = formatDateParam(date);
-      
+
       // Check if this is today's date
       const today = new Date();
-      const isCurrentDate = 
-        date.getDate() === today.getDate() && 
-        date.getMonth() === today.getMonth() && 
+      const isCurrentDate =
+        date.getDate() === today.getDate() &&
+        date.getMonth() === today.getMonth() &&
         date.getFullYear() === today.getFullYear();
-      
+
       // Only include date parameter if it's not today
       const dateParam = isCurrentDate ? '' : `&date=${formattedDate}`;
-      
-      const response = await fetch(`/api/tablet/fetch_statistics?period=${period}${dateParam}`);
+
+      // For year view, use the year parameter to set the date range
+      const yearParam = period === "year" && year ? `&year=${year}` : '';
+
+      const response = await fetch(`/api/tablet/fetch_statistics?period=${period}${dateParam}${yearParam}`);
       
       if (!response.ok) {
         throw new Error(`Failed to fetch statistics: ${response.status}`);
@@ -289,9 +294,9 @@ function Statistics({ socket, wsConnected, authenticatedChannel }: StatisticsPro
   }, [socket, selectedDate, timeFrame, stats?.year]);
   
   // Function to fetch yearly statistics
-  const fetchYearlyStatistics = async () => {
-    if (stats?.year && !isLoadingYear) return; // Don't fetch if we already have the data
-    fetchStatistics(selectedDate, "year");
+  const fetchYearlyStatistics = async (year?: number) => {
+    const targetYear = year ?? selectedYear;
+    fetchStatistics(selectedDate, "year", targetYear);
   };
   
   // Handle tab changes
@@ -302,12 +307,35 @@ function Statistics({ socket, wsConnected, authenticatedChannel }: StatisticsPro
   // Handle time frame changes
   const handleTimeFrameChange = (value: "today" | "year") => {
     setTimeFrame(value);
-    
-    // Fetch yearly data if switching to year view and don't already have it
-    if (value === "year" && !stats?.year) {
-      fetchYearlyStatistics();
+
+    // Fetch yearly data if switching to year view
+    if (value === "year") {
+      fetchYearlyStatistics(selectedYear);
     }
   };
+
+  // Handle year selection change
+  const handleYearChange = (year: string) => {
+    const yearNumber = parseInt(year, 10);
+    setSelectedYear(yearNumber);
+    // Switch to year view if not already there
+    if (timeFrame !== "year") {
+      setTimeFrame("year");
+    }
+    // Clear existing year stats and fetch new data
+    setStats(prevStats => prevStats ? { ...prevStats, year: undefined } : null);
+    fetchYearlyStatistics(yearNumber);
+  };
+
+  // Generate list of available years (from 2020 to current year)
+  const availableYears = React.useMemo(() => {
+    const currentYear = new Date().getFullYear();
+    const years: number[] = [];
+    for (let year = currentYear; year >= 2020; year--) {
+      years.push(year);
+    }
+    return years;
+  }, []);
   
   // Handle date change
   const handleDateChange = (date: Date | undefined) => {
@@ -529,17 +557,37 @@ function Statistics({ socket, wsConnected, authenticatedChannel }: StatisticsPro
                     <Clock className="h-4 w-4 sm:h-4 sm:w-4" />
                     <span>I dag</span>
                   </button>
-                  <button 
-                    onClick={() => handleTimeFrameChange("year")}
-                    className={`flex items-center gap-1.5 sm:gap-1.5 px-4 sm:px-3 py-2 sm:py-1.5 rounded-full text-sm sm:text-sm font-medium transition-colors whitespace-nowrap
-                      ${timeFrame === "year" 
-                        ? "bg-primary text-primary-foreground" 
-                        : "bg-muted hover:bg-muted/80"}`}
-                  >
-                    <CalendarIcon className="h-4 w-4 sm:h-4 sm:w-4" />
-                    <span>Året</span>
-                  </button>
-                  
+                  {/* Year Selector with Dropdown */}
+                  <div className="flex items-center">
+                    <button
+                      onClick={() => handleTimeFrameChange("year")}
+                      className={`flex items-center gap-1.5 sm:gap-1.5 px-4 sm:px-3 py-2 sm:py-1.5 rounded-l-full text-sm sm:text-sm font-medium transition-colors whitespace-nowrap
+                        ${timeFrame === "year"
+                          ? "bg-primary text-primary-foreground"
+                          : "bg-muted hover:bg-muted/80"}`}
+                    >
+                      <CalendarIcon className="h-4 w-4 sm:h-4 sm:w-4" />
+                      <span>År</span>
+                    </button>
+                    <Select value={selectedYear.toString()} onValueChange={handleYearChange}>
+                      <SelectTrigger
+                        className={`w-[80px] h-auto px-2 py-2 sm:py-1.5 rounded-l-none rounded-r-full border-l text-sm font-medium
+                          ${timeFrame === "year"
+                            ? "bg-primary text-primary-foreground border-primary-foreground/30"
+                            : "bg-muted border-muted-foreground/20 hover:bg-muted/80"}`}
+                      >
+                        <SelectValue placeholder={selectedYear.toString()} />
+                      </SelectTrigger>
+                      <SelectContent>
+                        {availableYears.map((year) => (
+                          <SelectItem key={year} value={year.toString()}>
+                            {year}
+                          </SelectItem>
+                        ))}
+                      </SelectContent>
+                    </Select>
+                  </div>
+
                   {/* Calendar Selector */}
                   <Popover open={calendarOpen} onOpenChange={setCalendarOpen}>
                     <PopoverTrigger asChild>
@@ -579,9 +627,9 @@ function Statistics({ socket, wsConnected, authenticatedChannel }: StatisticsPro
               </div>
               
               <CardDescription className="text-sm sm:text-base mt-1 order-3 sm:order-none">
-                {timeFrame === "today" 
-                  ? `Statistik for ${format(selectedDate, 'dd. MMMM yyyy', { locale: da })}${isCurrentDate(selectedDate) ? ' (i dag)' : ''}` 
-                  : `Årsstatistik for ${selectedDate.getFullYear()}`}
+                {timeFrame === "today"
+                  ? `Statistik for ${format(selectedDate, 'dd. MMMM yyyy', { locale: da })}${isCurrentDate(selectedDate) ? ' (i dag)' : ''}`
+                  : `Årsstatistik for ${selectedYear}`}
               </CardDescription>
             </div>
             
