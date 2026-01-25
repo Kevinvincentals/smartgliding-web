@@ -1827,14 +1827,14 @@ function StartlistePageContent() {
           tcasAlert={tcasAlert}
         />
         
-        {/* Add padding to content to account for fixed header height - adjusted for slimmer mobile header */}
-        <div className="h-[calc(8rem+2rem)] md:h-[calc(var(--fixed-header-total-height)+5rem+2.5rem)] flex-shrink-0"></div>
+        {/* Add padding to content to account for fixed header height - minimal on mobile (just top info bar) */}
+        <div className="h-[44px] sm:h-[calc(var(--fixed-header-total-height)+5rem+2.5rem)] flex-shrink-0"></div>
         
-        {/* Main content */}
-        <div className="flex-1 p-2 pt-6 sm:p-3 m-0 overflow-auto">
-          <StartList 
-            socket={socketRef.current} 
-            wsConnected={wsConnected} 
+        {/* Main content - bottom padding only for nav bar, FAB floats over content */}
+        <div className="flex-1 p-2 pt-1 pb-[76px] sm:p-3 sm:pb-3 m-0 overflow-y-auto">
+          <StartList
+            socket={socketRef.current}
+            wsConnected={wsConnected}
             dailyInfo={dailyInfo}
             authenticatedChannel={authenticatedChannel}
             airfieldOptions={airfieldOptions}

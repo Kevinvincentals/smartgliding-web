@@ -7,6 +7,76 @@ import { useStartliste } from "@/contexts/startlist-context"
 import { AddFlightDialog } from "@/components/flights/add-flight-dialog"
 import { ChangeAirfieldDialog } from "@/components/dialogs/change-airfield-dialog"
 import { useIsMobile } from "@/hooks/use-mobile"
+import { cn } from "@/lib/utils"
+
+// Mobile Bottom Navigation Component
+interface MobileBottomNavProps {
+  currentPage: string;
+  navigateToPage: (page: string) => void;
+  schoolEnabled: boolean;
+}
+
+function MobileBottomNav({ currentPage, navigateToPage, schoolEnabled }: MobileBottomNavProps) {
+  return (
+    <div className="sm:hidden fixed bottom-0 left-0 right-0 z-50 bg-background border-t border-border shadow-[0_-2px_10px_rgba(0,0,0,0.1)]">
+      <div className="flex items-stretch h-[72px]">
+        <button
+          onClick={() => navigateToPage('startlist')}
+          className={cn(
+            "flex flex-col items-center justify-center flex-1 transition-all gap-1 py-2",
+            currentPage === 'startlist'
+              ? "text-primary bg-primary/10"
+              : "text-muted-foreground active:bg-muted"
+          )}
+        >
+          <Plane className="h-7 w-7" />
+          <span className="text-sm font-semibold">Startliste</span>
+        </button>
+
+        {schoolEnabled && (
+          <button
+            onClick={() => navigateToPage('school')}
+            className={cn(
+              "flex flex-col items-center justify-center flex-1 transition-all gap-1 py-2",
+              currentPage === 'school'
+                ? "text-primary bg-primary/10"
+                : "text-muted-foreground active:bg-muted"
+            )}
+          >
+            <GraduationCap className="h-7 w-7" />
+            <span className="text-sm font-semibold">Skoling</span>
+          </button>
+        )}
+
+        <button
+          onClick={() => navigateToPage('statistics')}
+          className={cn(
+            "flex flex-col items-center justify-center flex-1 transition-all gap-1 py-2",
+            currentPage === 'statistics'
+              ? "text-primary bg-primary/10"
+              : "text-muted-foreground active:bg-muted"
+          )}
+        >
+          <BarChart2 className="h-7 w-7" />
+          <span className="text-sm font-semibold">Statistik</span>
+        </button>
+
+        <button
+          onClick={() => navigateToPage('settings')}
+          className={cn(
+            "flex flex-col items-center justify-center flex-1 transition-all gap-1 py-2",
+            currentPage === 'settings'
+              ? "text-primary bg-primary/10"
+              : "text-muted-foreground active:bg-muted"
+          )}
+        >
+          <SettingsIcon className="h-7 w-7" />
+          <span className="text-sm font-semibold">Indstillinger</span>
+        </button>
+      </div>
+    </div>
+  );
+}
 
 interface HeaderInfoProps {
   wsConnected: boolean;
@@ -164,58 +234,67 @@ export function StartlisteHeader({
     return () => clearInterval(interval)
   }, [])
 
+  // Handle "+" button click - navigate to startlist and open dialog
+  const handleAddFlightClick = () => {
+    if (currentPage !== 'startlist') {
+      navigateToPage('startlist');
+      // Small delay to ensure navigation completes before opening dialog
+      setTimeout(() => setAddFlightDialogOpen(true), 100);
+    } else {
+      setAddFlightDialogOpen(true);
+    }
+  };
+
   // Render minimal header for mobile livemap
   if (isLivemap && isMobile) {
     return (
-      <div className="fixed top-0 left-0 right-0 z-40 bg-background/95 backdrop-blur-sm shadow-md">
-        <div className="flex items-center justify-between px-4 py-3 bg-slate-100">
-          <button
-            onClick={() => navigateToPage('startlist')}
-            className="flex items-center gap-2 px-3 py-2 bg-primary text-primary-foreground rounded-lg font-medium"
-          >
-            <ArrowLeft className="h-4 w-4" />
-            Tilbage til startliste
-          </button>
-          
-          <div className="flex items-center gap-2">
-            {(() => {
-              const status = getConnectionStatus();
-              const StatusIcon = status.icon;
-              
-              return (
-                <Badge
-                  variant="outline"
-                  className={`${status.classes} flex items-center gap-1 px-2 py-0.5`}
-                >
-                  <StatusIcon className="h-3.5 w-3.5" />
-                  <span className="text-xs">{status.text}</span>
-                </Badge>
-              );
-            })()}
+      <>
+        {/* Top header with back button */}
+        <div className="fixed top-0 left-0 right-0 z-40 bg-background/95 backdrop-blur-sm shadow-sm">
+          <div className="flex items-center justify-between px-3 py-2 bg-slate-100">
+            <button
+              onClick={() => navigateToPage('startlist')}
+              className="flex items-center gap-2 px-3 py-2 bg-primary text-primary-foreground rounded-lg font-medium text-sm"
+            >
+              <ArrowLeft className="h-4 w-4" />
+              Tilbage til startliste
+            </button>
+
+            <div className="flex items-center gap-2">
+              {(() => {
+                const status = getConnectionStatus();
+                const StatusIcon = status.icon;
+                return (
+                  <Badge
+                    variant="outline"
+                    className={`${status.classes} flex items-center gap-1 px-2 py-0.5`}
+                  >
+                    <StatusIcon className="h-3.5 w-3.5" />
+                    <span className="text-xs">{status.text}</span>
+                  </Badge>
+                );
+              })()}
+            </div>
           </div>
         </div>
-      </div>
+
+        {/* Bottom Navigation */}
+        <MobileBottomNav
+          currentPage={currentPage}
+          navigateToPage={navigateToPage}
+          schoolEnabled={schoolEnabled}
+        />
+      </>
     )
   }
 
   return (
+    <>
     <div className="fixed top-0 left-0 right-0 z-40 bg-background/95 backdrop-blur-sm shadow-md">
       {/* Header Info Section */}
       <div 
         className="header-info flex flex-col sm:flex-row sm:justify-between items-start sm:items-center gap-1.5 sm:gap-0 px-3 sm:px-4 py-2 sm:py-3 bg-slate-100 sm:h-[70px] relative"
       >
-        {/* Floating Livekort button - only on mobile, positioned on far right */}
-        <button
-          onClick={() => navigateToPage('livemap')}
-          className={`sm:hidden absolute top-1/2 -translate-y-1/2 right-3 px-3 py-1.5 rounded-lg text-sm font-medium transition-colors flex items-center gap-1.5 z-20
-            ${currentPage === 'livemap' 
-              ? 'bg-primary text-primary-foreground' 
-              : 'bg-gray-200 text-gray-700 hover:bg-gray-300'}`}
-        >
-          <MapPin className="h-4 w-4" />
-          Livekort
-        </button>
-        
         {/* Center badges container - absolute positioning for perfect centering */}
         <div className="hidden sm:flex absolute left-1/2 top-1/2 transform -translate-x-1/2 -translate-y-1/2 z-10 gap-2">
           {/* Current club and airfield badge - clickable */}
@@ -277,9 +356,9 @@ export function StartlisteHeader({
             
             {/* Mobile view for TCAS alert */}
             {tcasAlert && tcasAlert.type === 'landing_incursion' && (
-              <Badge 
+              <Badge
                 className={`
-                  sm:hidden bg-orange-100 hover:bg-orange-100 text-orange-800 border border-orange-300 
+                  sm:hidden bg-orange-100 hover:bg-orange-100 text-orange-800 border border-orange-300
                   px-2 py-0.5 text-xs font-medium
                   ${tcasAlert.severity === 'high' ? 'animate-pulse bg-red-100 text-red-800 border-red-300' : ''}
                 `}
@@ -287,6 +366,20 @@ export function StartlisteHeader({
                 Trafik! {formatAircraftRegistrations(tcasAlert.aircraft)}
               </Badge>
             )}
+
+            {/* Mobile Livekort badge */}
+            <Badge
+              onClick={() => navigateToPage('livemap')}
+              className={cn(
+                "sm:hidden flex items-center gap-1 px-2.5 py-0.5 text-sm font-medium cursor-pointer transition-colors",
+                currentPage === 'livemap'
+                  ? "bg-primary text-primary-foreground border-primary hover:bg-primary/90"
+                  : "bg-purple-100 hover:bg-purple-200 text-purple-800 border border-purple-300"
+              )}
+            >
+              <MapPin className="h-3.5 w-3.5" />
+              Livekort
+            </Badge>
           </div>
           <div className="hidden sm:flex items-center gap-1 text-sm text-muted-foreground mt-0.5">
             <User className="h-4 w-4" />
@@ -305,23 +398,23 @@ export function StartlisteHeader({
         </div>
       </div>
 
-      {/* Navigation Tabs */}
-      <div className="w-full h-14 sm:h-16 rounded-none bg-background flex">
+      {/* Navigation Tabs - Desktop only */}
+      <div className="hidden sm:flex w-full h-16 rounded-none bg-background">
         <button
           onClick={() => navigateToPage('startlist')}
-          className={`text-base sm:text-lg py-3 sm:py-4 flex-1 rounded-none flex items-center justify-center gap-1 sm:gap-2 transition-colors font-semibold
-            ${currentPage === 'startlist' 
-              ? 'bg-primary/10 text-primary' 
+          className={`text-lg py-4 flex-1 rounded-none flex items-center justify-center gap-2 transition-colors font-semibold
+            ${currentPage === 'startlist'
+              ? 'bg-primary/10 text-primary'
               : 'hover:bg-muted/50 text-gray-600'}`}
         >
-          <Plane className="h-4 w-4 sm:h-5 sm:w-5" />
+          <Plane className="h-5 w-5" />
           Startliste
         </button>
         <button
           onClick={() => navigateToPage('livemap')}
           className={`hidden md:flex text-lg py-4 flex-1 rounded-none items-center justify-center gap-2 transition-colors font-semibold
-            ${currentPage === 'livemap' 
-              ? 'bg-primary/10 text-primary' 
+            ${currentPage === 'livemap'
+              ? 'bg-primary/10 text-primary'
               : 'hover:bg-muted/50 text-gray-600'}`}
         >
           <MapPin className="h-5 w-5" />
@@ -330,40 +423,40 @@ export function StartlisteHeader({
         {schoolEnabled && (
           <button
             onClick={() => navigateToPage('school')}
-            className={`text-base sm:text-lg py-3 sm:py-4 flex-1 rounded-none flex items-center justify-center gap-1 sm:gap-2 transition-colors font-semibold
-              ${currentPage === 'school' 
-                ? 'bg-primary/10 text-primary' 
+            className={`text-lg py-4 flex-1 rounded-none flex items-center justify-center gap-2 transition-colors font-semibold
+              ${currentPage === 'school'
+                ? 'bg-primary/10 text-primary'
                 : 'hover:bg-muted/50 text-gray-600'}`}
           >
-            <GraduationCap className="h-4 w-4 sm:h-5 sm:w-5" />
+            <GraduationCap className="h-5 w-5" />
             Skoling
           </button>
         )}
         <button
           onClick={() => navigateToPage('statistics')}
-          className={`text-base sm:text-lg py-3 sm:py-4 flex-1 rounded-none flex items-center justify-center gap-1 sm:gap-2 transition-colors font-semibold
-            ${currentPage === 'statistics' 
-              ? 'bg-primary/10 text-primary' 
+          className={`text-lg py-4 flex-1 rounded-none flex items-center justify-center gap-2 transition-colors font-semibold
+            ${currentPage === 'statistics'
+              ? 'bg-primary/10 text-primary'
               : 'hover:bg-muted/50 text-gray-600'}`}
         >
-          <BarChart2 className="h-4 w-4 sm:h-5 sm:w-5" />
+          <BarChart2 className="h-5 w-5" />
           Statistik
         </button>
         <button
           onClick={() => navigateToPage('settings')}
-          className={`text-base sm:text-lg py-3 sm:py-4 flex-1 rounded-none flex items-center justify-center gap-1 sm:gap-2 transition-colors font-semibold
-            ${currentPage === 'settings' 
-              ? 'bg-primary/10 text-primary' 
+          className={`text-lg py-4 flex-1 rounded-none flex items-center justify-center gap-2 transition-colors font-semibold
+            ${currentPage === 'settings'
+              ? 'bg-primary/10 text-primary'
               : 'hover:bg-muted/50 text-gray-600'}`}
         >
-          <SettingsIcon className="h-4 w-4 sm:h-5 sm:w-5" />
+          <SettingsIcon className="h-5 w-5" />
           Indstillinger
         </button>
       </div>
       
-      {/* Add Flight Button - only shown on startlist page */}
+      {/* Add Flight Button - only shown on startlist page, desktop only */}
       {currentPage === "startlist" && (
-        <div className="px-2 py-2 bg-background/95 backdrop-blur-sm border-t border-b shadow-sm">
+        <div className="hidden sm:block px-2 py-2 bg-background/95 backdrop-blur-sm border-t border-b shadow-sm">
           <AddFlightDialog
             open={addFlightDialogOpen}
             onOpenChange={setAddFlightDialogOpen}
@@ -376,8 +469,8 @@ export function StartlisteHeader({
       
       {/* Table headers - only visible on desktop and startlist page */}
       {currentPage === "startlist" && (
-        <div className="px-2 md:px-3 py-1 bg-background/95 backdrop-blur-sm">
-          <div className="hidden md:grid grid-cols-[50px_1.5fr_2fr_0.8fr_0.8fr_0.8fr_150px] gap-2 py-1 rounded-md px-3">
+        <div className="hidden md:block px-2 md:px-3 py-1 bg-background/95 backdrop-blur-sm">
+          <div className="grid grid-cols-[50px_1.5fr_2fr_0.8fr_0.8fr_0.8fr_150px] gap-2 py-1 rounded-md px-3">
             <div className="text-base font-medium">#</div>
             <div className="text-base font-medium">Fly</div>
             <div className="text-base font-medium">Pilot</div>
@@ -396,5 +489,38 @@ export function StartlisteHeader({
         currentAirfield={currentAirfield}
       />
     </div>
+
+    {/* Mobile Bottom Navigation */}
+    <MobileBottomNav
+      currentPage={currentPage}
+      navigateToPage={navigateToPage}
+      schoolEnabled={schoolEnabled}
+    />
+
+    {/* Mobile Floating Add Button - only on startlist page */}
+    {currentPage === 'startlist' && (
+      <div className="sm:hidden fixed bottom-[76px] right-4 z-50">
+        <button
+          onClick={() => setAddFlightDialogOpen(true)}
+          className="w-14 h-14 rounded-full bg-primary text-primary-foreground shadow-lg flex items-center justify-center hover:bg-primary/90 active:scale-95 transition-all"
+          aria-label="Tilføj flyvning"
+        >
+          <Plus className="h-7 w-7" strokeWidth={2.5} />
+        </button>
+      </div>
+    )}
+
+    {/* Hidden AddFlightDialog for mobile */}
+    <div className="sm:hidden">
+      <AddFlightDialog
+        open={addFlightDialogOpen}
+        onOpenChange={setAddFlightDialogOpen}
+        onAddFlight={handleAddFlight}
+        airfieldOptions={airfieldOptions}
+        socket={socketRef.current}
+        hideTrigger={true}
+      />
+    </div>
+  </>
   )
 }

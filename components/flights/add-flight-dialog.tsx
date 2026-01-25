@@ -39,6 +39,7 @@ interface AddFlightDialogProps {
   ) => void
   airfieldOptions: AirfieldOption[]
   socket: WebSocket | null
+  hideTrigger?: boolean
 }
 
 export function AddFlightDialog({
@@ -47,6 +48,7 @@ export function AddFlightDialog({
   onAddFlight,
   airfieldOptions,
   socket,
+  hideTrigger = false,
 }: AddFlightDialogProps) {
   const [newFlight, setNewFlight] = useState({
     aircraftId: "",
@@ -730,13 +732,15 @@ export function AddFlightDialog({
     <>
       {isMobile ? (
         <Drawer open={open} onOpenChange={onOpenChange}>
-          <DrawerTrigger asChild>
-            <Button size="lg" className="h-16 w-full text-lg font-medium rounded-xl shadow-md">
-              <Plus className="mr-3 h-7 w-7" /> 
-              <Plane className="mr-2 h-6 w-6" />
-              Tilføj Flyvning
-            </Button>
-          </DrawerTrigger>
+          {!hideTrigger && (
+            <DrawerTrigger asChild>
+              <Button size="lg" className="h-16 w-full text-lg font-medium rounded-xl shadow-md">
+                <Plus className="mr-3 h-7 w-7" />
+                <Plane className="mr-2 h-6 w-6" />
+                Tilføj Flyvning
+              </Button>
+            </DrawerTrigger>
+          )}
           <DrawerContent className="h-[80vh] flex flex-col">
             <div className="px-4 pb-4 flex-1 flex flex-col min-h-0">
               <div className="grid gap-4 pt-4">
@@ -1017,13 +1021,15 @@ export function AddFlightDialog({
         </Drawer>
       ) : (
         <Dialog open={open} onOpenChange={onOpenChange}>
-          <DialogTrigger asChild>
-            <Button size="lg" className="h-16 w-full text-lg font-medium rounded-xl shadow-md">
-              <Plus className="mr-3 h-7 w-7" /> 
-              <Plane className="mr-2 h-6 w-6" />
-              Tilføj Flyvning
-            </Button>
-          </DialogTrigger>
+          {!hideTrigger && (
+            <DialogTrigger asChild>
+              <Button size="lg" className="h-16 w-full text-lg font-medium rounded-xl shadow-md">
+                <Plus className="mr-3 h-7 w-7" />
+                <Plane className="mr-2 h-6 w-6" />
+                Tilføj Flyvning
+              </Button>
+            </DialogTrigger>
+          )}
           <DialogContent className="sm:max-w-[500px] pt-4">
             <div className="grid gap-4 py-2">
               {error && (

@@ -893,11 +893,11 @@ function SchoolPageContent() {
           tcasAlert={tcasAlert}
         />
         
-        {/* Add padding to content to account for fixed header height */}
-        <div className="h-[calc(3rem+2.5rem)] md:h-[var(--fixed-header-total-height)] flex-shrink-0"></div>
-        
-        {/* Main content */}
-        <div className="flex-1 p-2 pt-8 sm:p-3 sm:pt-12 m-0 overflow-auto">
+        {/* Add padding to content to account for fixed header height - minimal on mobile */}
+        <div className="h-[44px] sm:h-[var(--fixed-header-total-height)] flex-shrink-0"></div>
+
+        {/* Main content - bottom padding for nav bar */}
+        <div className="flex-1 p-2 pt-1 pb-[76px] sm:p-3 sm:pt-12 sm:pb-3 m-0 overflow-y-auto">
           <School />
         </div>
       </main>

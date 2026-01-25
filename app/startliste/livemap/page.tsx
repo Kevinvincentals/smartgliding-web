@@ -231,11 +231,11 @@ function LiveMapPageContent() {
           isLivemap={true}
         />
         
-        {/* Add padding to content to account for fixed header height - smaller on mobile livemap */}
-        <div className={`${isMobile ? 'h-16' : 'h-[calc(4rem+3.5rem)] md:h-[var(--fixed-header-total-height)]'} flex-shrink-0`}></div>
-        
-        {/* Main content - full screen for map */}
-        <div className="flex-1 p-0 m-0 border-none">
+        {/* Add padding to content to account for fixed header height */}
+        <div className={`${isMobile ? 'h-[52px]' : 'h-[calc(4rem+3.5rem)] md:h-[var(--fixed-header-total-height)]'} flex-shrink-0`}></div>
+
+        {/* Main content - full screen for map, with bottom padding on mobile for nav */}
+        <div className={`flex-1 p-0 m-0 border-none ${isMobile ? 'pb-[72px]' : ''}`}>
           <LiveMap socket={socketRef.current} wsConnected={wsConnected} />
         </div>
       </main>
