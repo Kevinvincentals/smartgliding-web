@@ -9,9 +9,6 @@ export default function WelcomePage() {
         <h1 className="text-4xl font-bold tracking-tight">
           Velkommen til den digitale startliste
         </h1>
-        <p className="text-muted-foreground text-lg">
-          Din komplette løsning til håndtering af startlister
-        </p>
         <Button asChild size="lg">
           <Link href="/startliste">
             Gå til startliste
