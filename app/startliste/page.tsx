@@ -1758,7 +1758,7 @@ function StartlistePageContent() {
   } = useStartliste()
 
   return (
-    <div className="flex min-h-screen w-full flex-col bg-background overflow-hidden">
+    <div className="flex min-h-screen w-full flex-col bg-background">
       {/* Offline alert dialog based on WebSocket connection with delay */}
       <AlertDialog open={showDisconnectionDialog} onOpenChange={(open) => {
         // Allow manual dismissal but it will reappear if still disconnected
@@ -1830,8 +1830,8 @@ function StartlistePageContent() {
         {/* Add padding to content to account for fixed header height - minimal on mobile (just top info bar) */}
         <div className="h-[44px] sm:h-[calc(var(--fixed-header-total-height)+5rem+2.5rem)] flex-shrink-0"></div>
         
-        {/* Main content - bottom padding only for nav bar, FAB floats over content */}
-        <div className="flex-1 p-2 pt-1 pb-[76px] sm:p-3 sm:pb-3 m-0 overflow-y-auto">
+        {/* Main content - bottom padding for nav bar */}
+        <div className="flex-1 p-2 pt-1 pb-[76px] sm:p-3 sm:pb-3 m-0">
           <StartList
             socket={socketRef.current}
             wsConnected={wsConnected}

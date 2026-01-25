@@ -245,46 +245,36 @@ export function StartlisteHeader({
     }
   };
 
-  // Render minimal header for mobile livemap
+  // Render minimal header for mobile livemap - just back button, no bottom nav
   if (isLivemap && isMobile) {
     return (
-      <>
-        {/* Top header with back button */}
-        <div className="fixed top-0 left-0 right-0 z-40 bg-background/95 backdrop-blur-sm shadow-sm">
-          <div className="flex items-center justify-between px-3 py-2 bg-slate-100">
-            <button
-              onClick={() => navigateToPage('startlist')}
-              className="flex items-center gap-2 px-3 py-2 bg-primary text-primary-foreground rounded-lg font-medium text-sm"
-            >
-              <ArrowLeft className="h-4 w-4" />
-              Tilbage til startliste
-            </button>
+      <div className="fixed top-0 left-0 right-0 z-40 bg-background/95 backdrop-blur-sm shadow-sm">
+        <div className="flex items-center justify-between px-3 py-2 bg-slate-100">
+          <button
+            onClick={() => navigateToPage('startlist')}
+            className="flex items-center gap-2 px-3 py-2 bg-primary text-primary-foreground rounded-lg font-medium text-sm"
+          >
+            <ArrowLeft className="h-4 w-4" />
+            Tilbage til startliste
+          </button>
 
-            <div className="flex items-center gap-2">
-              {(() => {
-                const status = getConnectionStatus();
-                const StatusIcon = status.icon;
-                return (
-                  <Badge
-                    variant="outline"
-                    className={`${status.classes} flex items-center gap-1 px-2 py-0.5`}
-                  >
-                    <StatusIcon className="h-3.5 w-3.5" />
-                    <span className="text-xs">{status.text}</span>
-                  </Badge>
-                );
-              })()}
-            </div>
+          <div className="flex items-center gap-2">
+            {(() => {
+              const status = getConnectionStatus();
+              const StatusIcon = status.icon;
+              return (
+                <Badge
+                  variant="outline"
+                  className={`${status.classes} flex items-center gap-1 px-2 py-0.5`}
+                >
+                  <StatusIcon className="h-3.5 w-3.5" />
+                  <span className="text-xs">{status.text}</span>
+                </Badge>
+              );
+            })()}
           </div>
         </div>
-
-        {/* Bottom Navigation */}
-        <MobileBottomNav
-          currentPage={currentPage}
-          navigateToPage={navigateToPage}
-          schoolEnabled={schoolEnabled}
-        />
-      </>
+      </div>
     )
   }
 

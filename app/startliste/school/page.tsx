@@ -824,7 +824,7 @@ function SchoolPageContent() {
   } = useStartliste()
 
   return (
-    <div className="flex min-h-screen w-full flex-col bg-background overflow-hidden">
+    <div className="flex min-h-screen w-full flex-col bg-background">
       {/* Offline alert dialog based on WebSocket connection with delay */}
       <AlertDialog open={showDisconnectionDialog} onOpenChange={(open) => {
         // Allow manual dismissal but it will reappear if still disconnected
@@ -897,7 +897,7 @@ function SchoolPageContent() {
         <div className="h-[44px] sm:h-[var(--fixed-header-total-height)] flex-shrink-0"></div>
 
         {/* Main content - bottom padding for nav bar */}
-        <div className="flex-1 p-2 pt-1 pb-[76px] sm:p-3 sm:pt-12 sm:pb-3 m-0 overflow-y-auto">
+        <div className="flex-1 p-2 pt-1 pb-[76px] sm:p-3 sm:pt-12 sm:pb-3 m-0">
           <School />
         </div>
       </main>

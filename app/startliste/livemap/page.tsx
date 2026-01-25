@@ -161,7 +161,7 @@ function LiveMapPageContent() {
   const isMobile = useIsMobile()
 
   return (
-    <div className="flex min-h-screen w-full flex-col bg-background overflow-hidden">
+    <div className="flex min-h-screen w-full flex-col bg-background">
       {/* Offline alert dialog based on WebSocket connection with delay */}
       <AlertDialog open={showDisconnectionDialog} onOpenChange={(open) => {
         // Allow manual dismissal but it will reappear if still disconnected
@@ -220,24 +220,32 @@ function LiveMapPageContent() {
         </AlertDialogContent>
       </AlertDialog>
       
-      <main className="flex flex-1 flex-col overflow-hidden">
-        {/* Fixed header section - always visible when scrolling */}
-        <StartlisteHeader 
-          wsConnected={wsConnected} 
+      <main className={`flex flex-1 flex-col ${isMobile ? '' : 'overflow-hidden'}`}>
+        {/* Fixed header section */}
+        <StartlisteHeader
+          wsConnected={wsConnected}
           isAuthenticatedOnWs={isAuthenticatedOnWs}
-          pingStatus={pingStatus} 
+          pingStatus={pingStatus}
           dailyInfo={dailyInfo}
           tcasAlert={tcasAlert}
           isLivemap={true}
         />
-        
-        {/* Add padding to content to account for fixed header height */}
-        <div className={`${isMobile ? 'h-[52px]' : 'h-[calc(4rem+3.5rem)] md:h-[var(--fixed-header-total-height)]'} flex-shrink-0`}></div>
 
-        {/* Main content - full screen for map, with bottom padding on mobile for nav */}
-        <div className={`flex-1 p-0 m-0 border-none ${isMobile ? 'pb-[72px]' : ''}`}>
-          <LiveMap socket={socketRef.current} wsConnected={wsConnected} />
-        </div>
+        {isMobile ? (
+          /* Mobile: Map fills screen below header */
+          <div className="fixed inset-0 top-[46px]">
+            <LiveMap socket={socketRef.current} wsConnected={wsConnected} />
+          </div>
+        ) : (
+          <>
+            {/* Desktop: Spacer for fixed header */}
+            <div className="h-[calc(4rem+3.5rem)] md:h-[var(--fixed-header-total-height)] flex-shrink-0"></div>
+            {/* Map content */}
+            <div className="flex-1 p-0 m-0 border-none">
+              <LiveMap socket={socketRef.current} wsConnected={wsConnected} />
+            </div>
+          </>
+        )}
       </main>
     </div>
   )
