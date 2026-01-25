@@ -1171,26 +1171,80 @@ function StartList({ socket, wsConnected, dailyInfo, authenticatedChannel, airfi
 
   const handleDeleteClick = (id: number) => {
     // This function is called when a delete is confirmed from EditFlightDialog
-    
+
     // Find and update the flight with deleted status
     const flightIndex = flights.findIndex(f => f.id === id);
     if (flightIndex !== -1) {
       // Make a copy of the flights array
       const updatedFlights = [...flights];
-      
+
       // Mark the flight as deleted
       updatedFlights[flightIndex] = {
         ...updatedFlights[flightIndex],
         status: 'deleted',
         deleted: true
       };
-      
+
       // Update the state
       setFlights(updatedFlights);
-      
+
       // Close the edit dialog
       setIsEditDialogOpen(false);
       setEditFlight(null);
+    }
+  };
+
+  // Handle swipe-to-delete (direct delete without dialog confirmation)
+  const handleSwipeDelete = async (id: number) => {
+    const flightToDelete = flights.find(f => f.id === id);
+
+    if (!flightToDelete || !flightToDelete.originalId) {
+      return;
+    }
+
+    try {
+      // Call the delete API
+      const response = await fetch('/api/tablet/delete_flight', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+          flightId: flightToDelete.originalId,
+        }),
+      });
+
+      const data = await response.json();
+
+      if (!data.success) {
+        toast({
+          title: "Fejl ved sletning",
+          description: data.error || "Der opstod en fejl ved sletning af flyvningen",
+          variant: "destructive",
+        });
+        return;
+      }
+
+      // Optimistically update local state
+      setFlights(prevFlights =>
+        prevFlights.map(f =>
+          f.id === id
+            ? { ...f, status: 'deleted' as const, deleted: true }
+            : f
+        )
+      );
+
+      // Show success feedback
+      hotToast.success("Flyvning slettet", {
+        position: 'top-center'
+      });
+
+    } catch (error) {
+      toast({
+        title: "Fejl ved sletning",
+        description: "Der opstod en uventet fejl",
+        variant: "destructive",
+      });
     }
   };
 
@@ -1650,6 +1704,7 @@ function StartList({ socket, wsConnected, dailyInfo, authenticatedChannel, airfi
                     onEditClick={handleEditClick}
                     onStartFlight={handleStartFlight}
                     onEndFlight={handleEndFlight}
+                    onDeleteFlight={handleSwipeDelete}
                     onTimeClick={handleTimeClick}
                     onDuplicate={handleDuplicateFlight}
                     onReplayFlight={handleReplayFlight}

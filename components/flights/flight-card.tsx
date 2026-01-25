@@ -6,8 +6,9 @@ import { Button } from "@/components/ui/button"
 import { Tooltip, TooltipContent, TooltipTrigger, TooltipProvider } from "@/components/ui/tooltip"
 import { Clock, GraduationCap, MapPin, PlaneLanding, PlaneTakeoff, Users, Trash, Copy, User, FileText, RotateCcw, Building, Mountain, Gauge, Compass } from "lucide-react"
 import Image from "next/image"
-import { forwardRef, useState, useEffect } from "react"
+import { forwardRef, useState, useEffect, useRef, useCallback } from "react"
 import type { Flight } from "@/types/flight"
+import { useIsMobile } from "@/hooks/use-mobile"
 
 // Function to check if a pilot is a guest (id is exactly "guest")
 const isGuestPilot = (pilot: any) => {
@@ -27,6 +28,7 @@ interface FlightCardProps {
   onEditClick: (flight: Flight) => void
   onStartFlight: (id: number) => void
   onEndFlight: (id: number) => void
+  onDeleteFlight?: (id: number) => void
   onTimeClick: (id: number, type: "start" | "end") => void
   onDuplicate?: (flight: Flight) => void
   onReplayFlight?: (flight: Flight) => void
@@ -56,6 +58,7 @@ export const FlightCard = forwardRef<HTMLDivElement, FlightCardProps>(({
   onEditClick,
   onStartFlight,
   onEndFlight,
+  onDeleteFlight,
   onTimeClick,
   onDuplicate,
   onReplayFlight,
@@ -74,6 +77,185 @@ export const FlightCard = forwardRef<HTMLDivElement, FlightCardProps>(({
 }, ref) => {
   // Add animation state for visual highlighting
   const [highlight, setHighlight] = useState(false);
+
+  // Swipe gesture state for mobile
+  const isMobile = useIsMobile();
+  const [swipeOffset, setSwipeOffset] = useState(0);
+  const [isSwipingHorizontally, setIsSwipingHorizontally] = useState<boolean | null>(null);
+  const [isResetting, setIsResetting] = useState(false);
+  const [isDismissing, setIsDismissing] = useState<'left' | null>(null);
+  const cardRef = useRef<HTMLDivElement>(null);
+  const containerRef = useRef<HTMLDivElement>(null);
+  const lastTouchTimeRef = useRef<number>(0);
+  const lastTouchXRef = useRef<number>(0);
+  const velocityRef = useRef<number>(0);
+
+  // Swipe threshold for triggering action (in pixels)
+  const SWIPE_THRESHOLD = 80;
+  const VELOCITY_THRESHOLD = 0.5; // pixels per ms - fast swipe triggers action
+
+  // Apply elastic resistance for overscroll effect
+  const applyElasticResistance = (offset: number): number => {
+    const maxOffset = 100;
+    const absOffset = Math.abs(offset);
+    const sign = offset >= 0 ? 1 : -1;
+
+    if (absOffset <= maxOffset) {
+      return offset;
+    }
+    // Rubber band effect beyond max
+    const overscroll = absOffset - maxOffset;
+    const dampened = maxOffset + (overscroll * 0.3);
+    return sign * Math.min(dampened, maxOffset + 30);
+  };
+
+  // Touch state refs for native event handlers
+  const touchStartXRef = useRef<number | null>(null);
+  const touchStartYRef = useRef<number | null>(null);
+  const isSwipingHorizontallyRef = useRef<boolean | null>(null);
+  const swipeOffsetRef = useRef<number>(0);
+
+  // Use native touch events with { passive: false } to properly prevent scroll
+  useEffect(() => {
+    const card = cardRef.current;
+    if (!card || !isMobile) return;
+
+    const handleTouchStart = (e: TouchEvent) => {
+      if (isDismissing) return;
+      const touchX = e.touches[0].clientX;
+      touchStartXRef.current = touchX;
+      touchStartYRef.current = e.touches[0].clientY;
+      isSwipingHorizontallyRef.current = null;
+      setIsResetting(false);
+      lastTouchTimeRef.current = Date.now();
+      lastTouchXRef.current = touchX;
+      velocityRef.current = 0;
+    };
+
+    const handleTouchMove = (e: TouchEvent) => {
+      if (touchStartXRef.current === null || touchStartYRef.current === null || isDismissing) return;
+
+      const currentX = e.touches[0].clientX;
+      const currentY = e.touches[0].clientY;
+      const diffX = currentX - touchStartXRef.current;
+      const diffY = currentY - touchStartYRef.current;
+
+      // Calculate velocity
+      const now = Date.now();
+      const dt = now - lastTouchTimeRef.current;
+      if (dt > 0) {
+        velocityRef.current = (currentX - lastTouchXRef.current) / dt;
+      }
+      lastTouchTimeRef.current = now;
+      lastTouchXRef.current = currentX;
+
+      // Determine swipe direction on first significant movement
+      if (isSwipingHorizontallyRef.current === null && (Math.abs(diffX) > 8 || Math.abs(diffY) > 8)) {
+        const isHorizontal = Math.abs(diffX) > Math.abs(diffY);
+        isSwipingHorizontallyRef.current = isHorizontal;
+        setIsSwipingHorizontally(isHorizontal);
+        if (!isHorizontal) {
+          return;
+        }
+      }
+
+      if (isSwipingHorizontallyRef.current === false) return;
+
+      // HARD LOCK: Prevent ALL scroll when swiping horizontally
+      if (isSwipingHorizontallyRef.current === true) {
+        e.preventDefault();
+        e.stopPropagation();
+        e.stopImmediatePropagation();
+      }
+
+      // Only allow swipe left (for delete), block swipe right
+      if (diffX > 0) {
+        swipeOffsetRef.current = 0;
+        setSwipeOffset(0);
+        return;
+      }
+
+      // Apply elastic resistance
+      const elasticOffset = applyElasticResistance(diffX);
+      swipeOffsetRef.current = elasticOffset;
+      setSwipeOffset(elasticOffset);
+    };
+
+    const handleTouchEnd = (e: TouchEvent) => {
+      if (touchStartXRef.current === null || isDismissing) {
+        if (!isDismissing) {
+          swipeOffsetRef.current = 0;
+          setSwipeOffset(0);
+          touchStartXRef.current = null;
+          touchStartYRef.current = null;
+          isSwipingHorizontallyRef.current = null;
+          setIsSwipingHorizontally(null);
+        }
+        return;
+      }
+
+      // HARD LOCK: Prevent any scroll behavior on touch end when we were swiping
+      if (isSwipingHorizontallyRef.current === true) {
+        e.preventDefault();
+        e.stopPropagation();
+        e.stopImmediatePropagation();
+      }
+
+      const currentSwipeOffset = swipeOffsetRef.current;
+      const velocity = velocityRef.current;
+      const fastSwipeLeft = velocity < -VELOCITY_THRESHOLD;
+
+      // Check if swipe exceeded threshold OR was a fast swipe (only for left/delete)
+      const shouldTriggerLeft = currentSwipeOffset <= -SWIPE_THRESHOLD || (fastSwipeLeft && currentSwipeOffset < -30);
+
+      // Get card width for dismiss animation
+      const cardWidth = containerRef.current?.offsetWidth || 400;
+
+      if (shouldTriggerLeft && onDeleteFlight && flight.status !== 'deleted' && !flight.deleted) {
+        // Animate card off to the left, then trigger delete
+        setIsDismissing('left');
+        swipeOffsetRef.current = -cardWidth - 20;
+        setSwipeOffset(-cardWidth - 20);
+
+        setTimeout(() => {
+          onDeleteFlight(flight.id);
+          // Don't reset - card will be removed from DOM
+        }, 250);
+      } else {
+        // Animate back with spring effect
+        setIsResetting(true);
+        swipeOffsetRef.current = 0;
+        setSwipeOffset(0);
+
+        // Clear resetting state after animation
+        setTimeout(() => setIsResetting(false), 300);
+      }
+
+      touchStartXRef.current = null;
+      touchStartYRef.current = null;
+      isSwipingHorizontallyRef.current = null;
+      setIsSwipingHorizontally(null);
+    };
+
+    // Add event listeners with { passive: false } to allow preventDefault
+    card.addEventListener('touchstart', handleTouchStart, { passive: true });
+    card.addEventListener('touchmove', handleTouchMove, { passive: false });
+    card.addEventListener('touchend', handleTouchEnd, { passive: false });
+
+    return () => {
+      card.removeEventListener('touchstart', handleTouchStart);
+      card.removeEventListener('touchmove', handleTouchMove);
+      card.removeEventListener('touchend', handleTouchEnd);
+    };
+  }, [isMobile, isDismissing, flight.id, flight.status, flight.deleted, onDeleteFlight]);
+
+  // Calculate action progress (0 to 1)
+  const getActionProgress = () => {
+    return Math.min(1, Math.abs(swipeOffset) / SWIPE_THRESHOLD);
+  };
+
+  const actionProgress = isDismissing ? 1 : getActionProgress();
+  const isAtThreshold = Math.abs(swipeOffset) >= SWIPE_THRESHOLD || isDismissing !== null;
   
   // Determine if this flight can be edited/deleted by the current club
   // Rule: Home club of the airfield can edit all flights, visiting clubs can only edit their own flights
@@ -405,12 +587,74 @@ export const FlightCard = forwardRef<HTMLDivElement, FlightCardProps>(({
       
       {/* Card view - Mobile (regardless of tableMode) */}
       <TooltipProvider>
-        <Card
-          ref={tableMode ? undefined : ref} // Only use ref on card view if not in table mode
-          id={`flight-${flight.id}-card`}
-          className={`${tableMode ? "md:hidden" : ""} overflow-hidden ${canEdit ? 'md:hover:shadow-md cursor-pointer md:active:bg-accent/30' : 'cursor-not-allowed'} ${statusClasses} ${getBorderStyle()} ${getHighlightClass()}`}
-          onClick={() => canEdit && onEditClick(flight)}
+        <div
+          ref={(el) => {
+            // Handle both refs
+            containerRef.current = el;
+            if (!tableMode && ref) {
+              if (typeof ref === 'function') {
+                ref(el);
+              } else {
+                ref.current = el;
+              }
+            }
+          }}
+          className={`${tableMode ? "md:hidden" : ""} relative overflow-hidden rounded-lg`}
+          style={{
+            // Hide overflow during dismiss to prevent layout shift
+            opacity: isDismissing ? 1 : undefined,
+          }}
         >
+          {/* Swipe action background - Delete (swipe left) - only on mobile */}
+          {isMobile && canEdit && onDeleteFlight && (
+            <div
+              className="absolute inset-y-0 right-0 flex items-center justify-end overflow-hidden rounded-r-lg"
+              style={{
+                width: isDismissing === 'left' ? '100%' : Math.max(0, -swipeOffset) + 'px',
+                background: '#ef4444',
+                transition: (isResetting || isDismissing) ? 'width 0.25s cubic-bezier(0.25, 0.46, 0.45, 0.94)' : 'none'
+              }}
+            >
+              <div
+                className="flex items-center gap-1.5 text-white font-semibold whitespace-nowrap pr-3"
+                style={{
+                  opacity: actionProgress,
+                  transform: `scale(${0.8 + actionProgress * 0.2})`,
+                  transition: (isResetting || isDismissing) ? 'all 0.25s cubic-bezier(0.25, 0.46, 0.45, 0.94)' : 'none'
+                }}
+              >
+                <span className="text-sm">{isAtThreshold ? "Slip!" : "Slet"}</span>
+                <Trash
+                  className="h-5 w-5 flex-shrink-0"
+                  style={{
+                    transform: isAtThreshold ? 'translateX(-2px)' : 'none',
+                    transition: 'transform 0.15s ease-out'
+                  }}
+                />
+              </div>
+            </div>
+          )}
+
+          <Card
+            ref={cardRef}
+            id={`flight-${flight.id}-card`}
+            className={`overflow-hidden ${canEdit ? 'md:hover:shadow-md cursor-pointer md:active:bg-accent/30' : 'cursor-not-allowed'} ${statusClasses} ${getBorderStyle()} ${getHighlightClass()}`}
+            style={{
+              transform: isMobile ? `translateX(${swipeOffset}px)` : undefined,
+              transition: (isResetting || isDismissing)
+                ? 'transform 0.25s cubic-bezier(0.25, 0.46, 0.45, 0.94)'
+                : 'none',
+              willChange: isMobile ? 'transform' : undefined,
+              // Prevent any touch-action that could cause scroll
+              touchAction: isMobile ? 'pan-y pinch-zoom' : undefined,
+            }}
+            onClick={() => {
+              // Only trigger click if not swiping
+              if (Math.abs(swipeOffset) < 5 && canEdit && !isResetting && !isDismissing) {
+                onEditClick(flight);
+              }
+            }}
+          >
           <div className="p-3 space-y-2.5">
             {/* Top row: Aircraft + Actions */}
             <div className="flex items-center justify-between">
@@ -638,6 +882,7 @@ export const FlightCard = forwardRef<HTMLDivElement, FlightCardProps>(({
             </button>
           </div>
         </Card>
+        </div>
       </TooltipProvider>
     </>
   );
