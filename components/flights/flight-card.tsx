@@ -222,13 +222,14 @@ export const FlightCard = forwardRef<HTMLDivElement, FlightCardProps>(({
           // Don't reset - card will be removed from DOM
         }, 250);
       } else {
-        // Animate back with spring effect
-        setIsResetting(true);
-        swipeOffsetRef.current = 0;
-        setSwipeOffset(0);
-
-        // Clear resetting state after animation
-        setTimeout(() => setIsResetting(false), 300);
+        // Only animate back if there was an actual swipe
+        if (currentSwipeOffset !== 0) {
+          setIsResetting(true);
+          swipeOffsetRef.current = 0;
+          setSwipeOffset(0);
+          // Clear resetting state after animation
+          setTimeout(() => setIsResetting(false), 300);
+        }
       }
 
       touchStartXRef.current = null;
