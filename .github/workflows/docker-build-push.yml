@@ -41,7 +41,7 @@ jobs:
         password: ${{ secrets.GITHUB_TOKEN }}
 
     - name: Build and push with Bake
-      uses: docker/bake-action@v4
+      uses: docker/bake-action@v5
       env:
         # Convert repository name to lowercase for Docker registry compatibility
         REGISTRY: ${{ env.REGISTRY }}/kevinvincentals/smartgliding-web
