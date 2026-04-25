@@ -11,7 +11,8 @@ import {
   Shield,
   User,
   Settings,
-  Trash2,
+  UserCheck,
+  UserX,
   ChevronUp,
   ChevronDown,
   ChevronsUpDown
@@ -162,42 +163,44 @@ export function PilotManagement() {
       <ChevronDown className="h-4 w-4" />
   }
 
-  const handleBatchRemove = async () => {
+  const handleBatchSetStatus = async (status: 'ACTIVE' | 'INACTIVE') => {
     if (selectedPilotIds.length === 0) return
 
-    if (!confirm(`Er du sikker på at du vil fjerne ${selectedPilotIds.length} pilot(er) fra klubben?`)) {
+    const verb = status === 'INACTIVE' ? 'deaktivere' : 'aktivere'
+    if (!confirm(`Er du sikker på at du vil ${verb} ${selectedPilotIds.length} pilot(er)?`)) {
       return
     }
 
     try {
-      // Remove each selected pilot
-      const removePromises = selectedPilotIds.map(async (pilotId) => {
-        const response = await fetch('/api/club/admin/unassign_pilot', {
-          method: 'POST',
-          headers: {
-            'Content-Type': 'application/json',
-          },
-          credentials: 'include',
-          body: JSON.stringify({ pilotId }),
+      await Promise.all(
+        selectedPilotIds.map(async (pilotId) => {
+          const response = await fetch('/api/club/admin/update_pilot', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            credentials: 'include',
+            body: JSON.stringify({ pilotId, status }),
+          })
+          if (!response.ok) {
+            throw new Error(`Failed to update pilot ${pilotId}`)
+          }
         })
+      )
 
-        if (!response.ok) {
-          throw new Error(`Failed to remove pilot ${pilotId}`)
-        }
-      })
+      const noun = status === 'INACTIVE' ? 'deaktiveret' : 'aktiveret'
+      hotToast.success(`${selectedPilotIds.length} pilot(er) ${noun}`)
 
-      await Promise.all(removePromises)
-
-      hotToast.success(`${selectedPilotIds.length} pilot(er) er fjernet fra klubben`)
-
-      // Remove pilots from list
-      setPilots(prevPilots => 
-        prevPilots.filter(p => !selectedPilotIds.includes(p.pilot.id))
+      // Update statuses in the local list (keep ClubPilot membership intact)
+      setPilots(prevPilots =>
+        prevPilots.map(p =>
+          selectedPilotIds.includes(p.pilot.id)
+            ? { ...p, pilot: { ...p.pilot, status } }
+            : p
+        )
       )
       setSelectedPilotIds([])
     } catch (error) {
-      console.error('Error removing pilots:', error)
-      hotToast.error("Kunne ikke fjerne alle piloter")
+      console.error('Error updating pilot statuses:', error)
+      hotToast.error('Kunne ikke opdatere alle piloter')
     }
   }
 
@@ -332,34 +335,39 @@ export function PilotManagement() {
     }
   }
 
-  const handleUnassignPilot = async (pilotId: string) => {
+  const handleSetPilotStatus = async (pilotId: string, status: 'ACTIVE' | 'INACTIVE') => {
     try {
-      const response = await fetch('/api/club/admin/unassign_pilot', {
+      const response = await fetch('/api/club/admin/update_pilot', {
         method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-        },
+        headers: { 'Content-Type': 'application/json' },
         credentials: 'include',
-        body: JSON.stringify({
-          pilotId: pilotId
-        }),
+        body: JSON.stringify({ pilotId, status }),
       })
 
       if (!response.ok) {
-        throw new Error('Failed to unassign pilot')
+        throw new Error('Failed to update pilot status')
       }
 
       const data = await response.json()
-      if (data.message === 'Pilot unassigned from club successfully') {
-        hotToast.success("Piloten er fjernet fra klubben")
-        // Remove pilot from list without full refresh
-        setPilots(prevPilots => prevPilots.filter(p => p.pilot.id !== pilotId))
-      } else {
-        throw new Error(data.error || 'Failed to unassign pilot')
+      if (data.message !== 'Pilot updated successfully') {
+        throw new Error(data.error || 'Failed to update pilot status')
       }
+
+      // Keep ClubPilot membership; just flip the pilot's status in the list
+      setPilots(prevPilots =>
+        prevPilots.map(p =>
+          p.pilot.id === pilotId ? { ...p, pilot: { ...p.pilot, status } } : p
+        )
+      )
+
+      hotToast.success(
+        status === 'INACTIVE'
+          ? 'Pilotens konto er deaktiveret'
+          : 'Pilotens konto er aktiveret'
+      )
     } catch (error) {
-      console.error('Error unassigning pilot:', error)
-      hotToast.error("Kunne ikke fjerne pilot fra klubben")
+      console.error('Error updating pilot status:', error)
+      hotToast.error('Kunne ikke ændre pilotens status')
     }
   }
 
@@ -424,20 +432,28 @@ export function PilotManagement() {
                 <span className="text-sm text-muted-foreground">
                   {selectedPilotIds.length} valgt
                 </span>
-                <Button 
-                  size="sm" 
-                  variant="outline" 
+                <Button
+                  size="sm"
+                  variant="outline"
                   onClick={() => setIsBatchMembershipOpen(true)}
                 >
                   Batch Medlemskab
                 </Button>
-                <Button 
-                  size="sm" 
-                  variant="destructive" 
-                  onClick={handleBatchRemove}
+                <Button
+                  size="sm"
+                  variant="outline"
+                  onClick={() => handleBatchSetStatus('ACTIVE')}
                 >
-                  <Trash2 className="h-4 w-4 mr-1" />
-                  Fjern Fra Klub
+                  <UserCheck className="h-4 w-4 mr-1" />
+                  Aktivér
+                </Button>
+                <Button
+                  size="sm"
+                  variant="destructive"
+                  onClick={() => handleBatchSetStatus('INACTIVE')}
+                >
+                  <UserX className="h-4 w-4 mr-1" />
+                  Deaktivér
                 </Button>
               </div>
             )}
@@ -626,16 +642,28 @@ export function PilotManagement() {
                               </DropdownMenuItem>
                             )}
                             <DropdownMenuSeparator />
-                            <DropdownMenuItem 
-                              className="text-destructive"
-                              onClick={(e) => {
-                                e.stopPropagation()
-                                handleUnassignPilot(clubPilot.pilot.id)
-                              }}
-                            >
-                              <Users className="h-4 w-4 mr-2" />
-                              Fjern fra Klub
-                            </DropdownMenuItem>
+                            {clubPilot.pilot.status === 'INACTIVE' ? (
+                              <DropdownMenuItem
+                                onClick={(e) => {
+                                  e.stopPropagation()
+                                  handleSetPilotStatus(clubPilot.pilot.id, 'ACTIVE')
+                                }}
+                              >
+                                <UserCheck className="h-4 w-4 mr-2" />
+                                Aktivér konto
+                              </DropdownMenuItem>
+                            ) : (
+                              <DropdownMenuItem
+                                className="text-destructive"
+                                onClick={(e) => {
+                                  e.stopPropagation()
+                                  handleSetPilotStatus(clubPilot.pilot.id, 'INACTIVE')
+                                }}
+                              >
+                                <UserX className="h-4 w-4 mr-2" />
+                                Deaktivér konto
+                              </DropdownMenuItem>
+                            )}
                           </DropdownMenuContent>
                         </DropdownMenu>
                       </TableCell>
