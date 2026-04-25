@@ -14,8 +14,7 @@ target "smartgliding-web" {
     "${REGISTRY}:main"
   ]
   platforms = [
-    "linux/amd64",
-    "linux/arm64"
+    "linux/amd64"
   ]
   cache-from = [
     "type=gha"
