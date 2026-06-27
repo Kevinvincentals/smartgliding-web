@@ -80,6 +80,7 @@ function getAirfieldName(icao: string): string {
   const airfieldNames: Record<string, string> = {
     'EKFS': 'Vøjstrup',
     'EKAB': 'Arnborg',
+    'EPZP': 'Zielona Góra-Przylep',
     // Add more airfields as needed
   };
   
