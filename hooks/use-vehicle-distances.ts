@@ -66,11 +66,15 @@ export function useVehicleDistances(active: boolean = true) {
         if (startbordRes.ok) {
           const data = await startbordRes.json()
           if (data.success && data.claim && data.claim.latitude != null && data.claim.longitude != null) {
-            setStartbord({
-              latitude: data.claim.latitude,
-              longitude: data.claim.longitude,
-              heading: data.claim.heading ?? null
-            })
+            // Ignore stale positions (10+ min old) — live updates will re-seed
+            const positionUpdatedAt = data.claim.positionUpdatedAt ? new Date(data.claim.positionUpdatedAt) : null
+            if (positionUpdatedAt && Date.now() - positionUpdatedAt.getTime() < OFFLINE_AFTER_MS) {
+              setStartbord({
+                latitude: data.claim.latitude,
+                longitude: data.claim.longitude,
+                heading: data.claim.heading ?? null
+              })
+            }
           }
         }
       } catch (error) {

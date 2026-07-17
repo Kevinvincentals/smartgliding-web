@@ -159,6 +159,15 @@ export function AircraftProvider({
   const [showVehicleDistanceOutsideMap, setShowVehicleDistanceOutsideMap] = useState(false);
   const vehicleRegistryRef = useRef<VehicleRegistry>(new Map());
 
+  // Vehicles and the startbord are hidden after 10 min without updates; this
+  // tick forces a re-render each minute so they disappear even when no new
+  // WebSocket messages arrive to trigger one.
+  const [, setStalenessTick] = useState(0);
+  useEffect(() => {
+    const interval = setInterval(() => setStalenessTick(t => t + 1), 60 * 1000);
+    return () => clearInterval(interval);
+  }, []);
+
   // Save showAllPlanes to localStorage when it changes
   useEffect(() => {
     if (typeof window !== 'undefined') {
@@ -727,14 +736,18 @@ export function AircraftProvider({
         if (response.ok) {
           const data = await response.json();
           if (data.success && data.claim && data.claim.latitude != null && data.claim.longitude != null) {
-            setStartbord({
-              deviceId: data.claim.deviceId,
-              latitude: data.claim.latitude,
-              longitude: data.claim.longitude,
-              heading: data.claim.heading ?? null,
-              accuracy: data.claim.accuracy ?? null,
-              updatedAt: data.claim.positionUpdatedAt ? new Date(data.claim.positionUpdatedAt) : new Date()
-            });
+            // Ignore stale positions (startbord tablet asleep/off for 10+ min)
+            const positionUpdatedAt = data.claim.positionUpdatedAt ? new Date(data.claim.positionUpdatedAt) : null;
+            if (positionUpdatedAt && Date.now() - positionUpdatedAt.getTime() < 10 * 60 * 1000) {
+              setStartbord({
+                deviceId: data.claim.deviceId,
+                latitude: data.claim.latitude,
+                longitude: data.claim.longitude,
+                heading: data.claim.heading ?? null,
+                accuracy: data.claim.accuracy ?? null,
+                updatedAt: positionUpdatedAt
+              });
+            }
           }
         }
       } catch (error) {
@@ -850,9 +863,9 @@ export function AircraftProvider({
     clubPlanes,
     isClubPlane,
     isFlying,
-    // Ground vehicles + startbord (vehicles unseen for 10 min are considered offline)
-    vehicles: vehicles.filter(v => new Date().getTime() - v.lastSeen.getTime() < 10 * 60 * 1000),
-    startbord,
+    // Ground vehicles + startbord disappear after 10 min without updates
+    vehicles: vehicles.filter(v => Date.now() - v.lastSeen.getTime() < 10 * 60 * 1000),
+    startbord: startbord && Date.now() - startbord.updatedAt.getTime() < 10 * 60 * 1000 ? startbord : null,
     showVehicleDistanceOutsideMap
   }
 
