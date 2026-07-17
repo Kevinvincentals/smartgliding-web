@@ -132,6 +132,14 @@
   margin-bottom: 0;
 }
 
+/* Direction-of-travel arrow shown inside the badge while the vehicle moves */
+.vehicle-direction-arrow {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  transform-origin: center center;
+}
+
 /* Startbord tablet marker */
 .startbord-icon-badge {
   display: flex;

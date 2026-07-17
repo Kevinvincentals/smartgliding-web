@@ -5,7 +5,6 @@ import { useEffect, useRef, useState, useCallback, useMemo } from "react"
 import { Plane, ZoomInIcon, PanelRightIcon, Timer } from "lucide-react"
 import type { LiveAircraft, LiveVehicle, StartbordState } from "@/types/live-map"
 import { svgForVehicleIcon, svgForStartbordIcon } from "@/lib/vehicle-icons"
-import { haversineMeters, formatDistance } from "@/lib/geo-utils"
 import { MapContainer, TileLayer, Marker, Popup, useMap, ZoomControl, Polyline, Polygon } from "react-leaflet"
 import L from "leaflet"
 import "leaflet/dist/leaflet.css"
@@ -205,24 +204,32 @@ const AircraftMarker = ({
   )
 }
 
-// Ground vehicle marker: circular badge with the vehicle's icon, name label and
-// (when the startbord position is known) the distance from the startbord.
+// Ground vehicle marker: circular badge with the vehicle's icon and its name
+// underneath (distance from the startbord lives in the sidebar, not here).
 interface VehicleMarkerProps {
   vehicle: LiveVehicle
-  distanceMeters: number | null
 }
 
-const VehicleMarker = ({ vehicle, distanceMeters }: VehicleMarkerProps) => {
-  const label = distanceMeters != null
-    ? `${vehicle.name} · ${formatDistance(distanceMeters)}`
-    : vehicle.name
+const VehicleMarker = ({ vehicle }: VehicleMarkerProps) => {
+  const label = vehicle.name
+
+  // While driving, swap the vehicle icon for a navigation-style arrow rotated
+  // to the direction of travel (rotating the side-view car icon looks wrong).
+  // Below ~5 km/h the track is GPS noise, so show the static icon instead.
+  const isMoving = vehicle.speed > 5
 
   const vehicleIcon = L.divIcon({
     className: 'custom-plane-icon',
     html: `
       <div class="marker-container vehicle-marker">
         <div class="vehicle-icon-badge">
-          ${svgForVehicleIcon(vehicle.icon, 18, 'white')}
+          ${isMoving
+            ? `<div class="vehicle-direction-arrow" style="transform: rotate(${vehicle.track}deg);">
+                <svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="white" stroke="none">
+                  <path d="m12 2 7 19-7-4-7 4 7-19z" />
+                </svg>
+              </div>`
+            : svgForVehicleIcon(vehicle.icon, 18, 'white')}
         </div>
         <div class="callsign-box vehicle-callsign">${label}</div>
       </div>`,
@@ -1046,14 +1053,11 @@ function MapPlaceholder({ isLoading }: MapPlaceholderProps) {
             />
           ))}
         
-        {/* Ground vehicles (winch, retrieve car, ...) with distance from startbord */}
+        {/* Ground vehicles (winch, retrieve car, ...) */}
         {vehicles.map((vehicle) => (
           <VehicleMarker
             key={`vehicle-${vehicle.ogn_id}`}
             vehicle={vehicle}
-            distanceMeters={startbord
-              ? haversineMeters(startbord.latitude, startbord.longitude, vehicle.latitude, vehicle.longitude)
-              : null}
           />
         ))}
 
