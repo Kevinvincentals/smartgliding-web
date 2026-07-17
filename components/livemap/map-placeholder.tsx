@@ -204,32 +204,33 @@ const AircraftMarker = ({
   )
 }
 
-// Ground vehicle marker: circular badge with the vehicle's icon and its name
-// underneath (distance from the startbord lives in the sidebar, not here).
+// Ground vehicle marker: bare icon (no badge), white in satellite mode and
+// dark on the standard map, matching how plane icons adapt. While driving,
+// the icon swaps to a navigation-style arrow rotated to the direction of
+// travel (rotating the side-view car icon looks wrong); below ~5 km/h the
+// track is GPS noise, so the static icon shows instead.
 interface VehicleMarkerProps {
   vehicle: LiveVehicle
+  mapType: 'standard' | 'satellite'
 }
 
-const VehicleMarker = ({ vehicle }: VehicleMarkerProps) => {
+const VehicleMarker = ({ vehicle, mapType }: VehicleMarkerProps) => {
   const label = vehicle.name
-
-  // While driving, swap the vehicle icon for a navigation-style arrow rotated
-  // to the direction of travel (rotating the side-view car icon looks wrong).
-  // Below ~5 km/h the track is GPS noise, so show the static icon instead.
   const isMoving = vehicle.speed > 5
+  const iconColor = mapType === 'satellite' ? '#ffffff' : '#1f2937'
 
   const vehicleIcon = L.divIcon({
     className: 'custom-plane-icon',
     html: `
       <div class="marker-container vehicle-marker">
-        <div class="vehicle-icon-badge">
+        <div class="vehicle-icon-plain">
           ${isMoving
             ? `<div class="vehicle-direction-arrow" style="transform: rotate(${vehicle.track}deg);">
-                <svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="white" stroke="none">
+                <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="${iconColor}" stroke="none">
                   <path d="m12 2 7 19-7-4-7 4 7-19z" />
                 </svg>
               </div>`
-            : svgForVehicleIcon(vehicle.icon, 18, 'white')}
+            : svgForVehicleIcon(vehicle.icon, 26, iconColor)}
         </div>
         <div class="callsign-box vehicle-callsign">${label}</div>
       </div>`,
@@ -673,7 +674,8 @@ function MapPlaceholder({ isLoading }: MapPlaceholderProps) {
     isClubPlane,
     isFlying,
     vehicles,
-    startbord
+    startbord,
+    vehicleFocus
   } = useAircraft()
   const isMobile = useIsMobile()
   const hasSetIcons = useRef(false)
@@ -747,7 +749,7 @@ function MapPlaceholder({ isLoading }: MapPlaceholderProps) {
     } else {
       // Disable following when no aircraft selected
       setIsFollowing(false);
-      
+
       // Zoom out to show all aircraft when deselecting (especially useful on mobile)
       if (mapRef.current && typeof (mapRef.current as any).fitToAllAircraft === 'function') {
         setTimeout(() => {
@@ -756,6 +758,17 @@ function MapPlaceholder({ isLoading }: MapPlaceholderProps) {
       }
     }
   }, [selectedAircraft?.id]); // Only trigger on aircraft ID change
+
+  // Vehicle clicked in the sidebar - fly to it like plane selection does
+  useEffect(() => {
+    if (vehicleFocus && mapRef.current) {
+      mapRef.current.flyTo(
+        [vehicleFocus.latitude, vehicleFocus.longitude],
+        15,
+        { animate: true, duration: 1.0 }
+      );
+    }
+  }, [vehicleFocus]);
   
   // Map interaction events to disable following on drag
   const handleMapInteraction = useCallback(() => {
@@ -1058,6 +1071,7 @@ function MapPlaceholder({ isLoading }: MapPlaceholderProps) {
           <VehicleMarker
             key={`vehicle-${vehicle.ogn_id}`}
             vehicle={vehicle}
+            mapType={mapType}
           />
         ))}
 

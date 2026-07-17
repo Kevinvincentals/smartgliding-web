@@ -26,7 +26,8 @@ export function AircraftPanel() {
     isClubPlane,
     isFlying,
     vehicles,
-    startbord
+    startbord,
+    focusVehicle
   } = useAircraft()
   const isMobile = useIsMobile()
   const aircraftListRef = useRef<HTMLDivElement>(null)
@@ -131,6 +132,7 @@ export function AircraftPanel() {
                     key={vehicle.ogn_id}
                     vehicle={vehicle}
                     startbord={startbord}
+                    onSelect={focusVehicle}
                   />
                 ))}
               </>

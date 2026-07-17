@@ -113,16 +113,13 @@
   align-items: center;
 }
 
-.vehicle-icon-badge {
+/* Bare vehicle icon, no badge — color set inline per map type */
+.vehicle-icon-plain {
   display: flex;
   align-items: center;
   justify-content: center;
   width: 28px;
   height: 28px;
-  border-radius: 50%;
-  background-color: #d97706; /* amber-600 */
-  border: 2px solid white;
-  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.4);
 }
 
 .callsign-box.vehicle-callsign,

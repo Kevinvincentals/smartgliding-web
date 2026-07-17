@@ -10,11 +10,13 @@ import { haversineMeters, formatDistance } from "@/lib/geo-utils"
 interface VehicleCardProps {
   vehicle: LiveVehicle
   startbord: StartbordState | null
+  onSelect: (vehicle: LiveVehicle) => void
 }
 
 // Sidebar card for a ground vehicle (winch, retrieve car, ...): shows speed,
 // heading, distance from the startbord and when it was last heard.
-export function VehicleCard({ vehicle, startbord }: VehicleCardProps) {
+// Clicking flies the map to the vehicle, like selecting a plane.
+export function VehicleCard({ vehicle, startbord, onSelect }: VehicleCardProps) {
   const [lastSeenFormatted, setLastSeenFormatted] = useState<string>('N/A')
 
   const Icon = VEHICLE_ICONS[vehicle.icon as VehicleIconKey] || Truck
@@ -66,7 +68,13 @@ export function VehicleCard({ vehicle, startbord }: VehicleCardProps) {
     : null
 
   return (
-    <Card className="p-4 border-amber-300/60 bg-amber-50/50">
+    <Card
+      className="p-4 cursor-pointer hover:bg-accent/50 active:bg-accent/70 transition-colors border-amber-300/60 bg-amber-50/50"
+      onClick={(e) => {
+        e.stopPropagation()
+        onSelect(vehicle)
+      }}
+    >
       <div className="flex items-center gap-3 mb-2">
         <div className="p-2 rounded-full bg-amber-100">
           <Icon className="h-6 w-6 text-amber-700" />

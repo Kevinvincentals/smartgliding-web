@@ -67,6 +67,9 @@ interface AircraftContextType {
   vehicles: LiveVehicle[]
   startbord: StartbordState | null
   showVehicleDistanceOutsideMap: boolean
+  // Set when a vehicle is clicked in the sidebar; the map flies to it
+  vehicleFocus: { latitude: number; longitude: number; requestedAt: number } | null
+  focusVehicle: (vehicle: { latitude: number; longitude: number }) => void
 }
 
 const AircraftContext = createContext<AircraftContextType | null>(null)
@@ -158,6 +161,13 @@ export function AircraftProvider({
   const [startbord, setStartbord] = useState<StartbordState | null>(null);
   const [showVehicleDistanceOutsideMap, setShowVehicleDistanceOutsideMap] = useState(false);
   const vehicleRegistryRef = useRef<VehicleRegistry>(new Map());
+
+  // Sidebar vehicle clicks fly the map to the vehicle (requestedAt makes
+  // clicking the same vehicle twice re-trigger the flight)
+  const [vehicleFocus, setVehicleFocus] = useState<{ latitude: number; longitude: number; requestedAt: number } | null>(null);
+  const focusVehicle = useCallback((vehicle: { latitude: number; longitude: number }) => {
+    setVehicleFocus({ latitude: vehicle.latitude, longitude: vehicle.longitude, requestedAt: Date.now() });
+  }, []);
 
   // Vehicles and the startbord are hidden after 10 min without updates; this
   // tick forces a re-render each minute so they disappear even when no new
@@ -866,7 +876,9 @@ export function AircraftProvider({
     // Ground vehicles + startbord disappear after 10 min without updates
     vehicles: vehicles.filter(v => Date.now() - v.lastSeen.getTime() < 10 * 60 * 1000),
     startbord: startbord && Date.now() - startbord.updatedAt.getTime() < 10 * 60 * 1000 ? startbord : null,
-    showVehicleDistanceOutsideMap
+    showVehicleDistanceOutsideMap,
+    vehicleFocus,
+    focusVehicle
   }
 
   return (
