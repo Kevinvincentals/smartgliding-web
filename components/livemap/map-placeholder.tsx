@@ -234,6 +234,7 @@ const VehicleMarker = ({ vehicle, distanceMeters }: VehicleMarkerProps) => {
     <Marker
       position={[vehicle.latitude, vehicle.longitude]}
       icon={vehicleIcon}
+      zIndexOffset={-1000} // keep aircraft markers above ground vehicles
     />
   )
 }
@@ -271,6 +272,7 @@ const StartbordMarker = ({ startbord }: StartbordMarkerProps) => {
     <Marker
       position={[startbord.latitude, startbord.longitude]}
       icon={startbordIcon}
+      zIndexOffset={-1000} // keep aircraft markers above the startbord marker
     />
   )
 }
