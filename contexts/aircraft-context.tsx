@@ -302,7 +302,7 @@ export function AircraftProvider({
       latitude: data.latitude,
       longitude: data.longitude,
       track: data.track ?? 0,
-      speed: data.ground_speed ?? 0,
+      speed: (data.ground_speed ?? 0) * 1.852, // OGN feed is in knots, LiveVehicle.speed is km/h
       lastSeen: data.last_seen ? new Date(data.last_seen) : new Date()
     };
   }, []);
@@ -317,6 +317,11 @@ export function AircraftProvider({
       });
       return Array.from(vehicleMap.values());
     });
+    // The same tracker may already sit in the aircraft list (e.g. the snapshot
+    // arrived before the vehicle registry loaded) — remove it so the vehicle
+    // isn't rendered twice.
+    const ognIds = new Set(vehicleData.map(data => normalizeOgnId(String(data.id))));
+    setAircraft(prev => prev.filter(a => !ognIds.has(normalizeOgnId(String(a.id)))));
   }, [toLiveVehicle]);
 
   // Handle incoming WebSocket messages
@@ -678,6 +683,37 @@ export function AircraftProvider({
             });
             vehicleRegistryRef.current = registry;
             setShowVehicleDistanceOutsideMap(data.showVehicleDistanceOutsideMap === true);
+            // The aircraft snapshot usually arrives before this fetch resolves,
+            // so registered vehicles may already sit in the aircraft list —
+            // move them over to the vehicles list so they don't render as planes.
+            if (registry.size > 0) {
+              setAircraft(prev => {
+                const moved = prev.filter(a => registry.has(normalizeOgnId(String(a.id))));
+                if (moved.length > 0) {
+                  setVehicles(vPrev => {
+                    const vehicleMap = new Map(vPrev.map(v => [v.ogn_id, v]));
+                    moved.forEach(a => {
+                      const ognId = normalizeOgnId(String(a.id));
+                      if (vehicleMap.has(ognId)) return; // idempotent under StrictMode double-invoke
+                      const entry = registry.get(ognId);
+                      vehicleMap.set(ognId, {
+                        id: String(a.id),
+                        ogn_id: ognId,
+                        name: entry?.name || a.registration,
+                        icon: entry?.icon || 'car',
+                        latitude: a.latitude,
+                        longitude: a.longitude,
+                        track: a.track ?? 0,
+                        speed: (a.speed ?? 0) * 1.852, // LiveAircraft OGN speed is knots
+                        lastSeen: a.lastSeen ? new Date(a.lastSeen) : new Date()
+                      });
+                    });
+                    return Array.from(vehicleMap.values());
+                  });
+                }
+                return prev.filter(a => !registry.has(normalizeOgnId(String(a.id))));
+              });
+            }
           }
         }
       } catch (error) {

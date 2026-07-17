@@ -301,6 +301,7 @@ function FitBounds({ mapRef }: FitBoundsProps) {
   const map = useMap();
   const hasInitiallyFit = useRef(false);
   const prevShowAllPlanes = useRef(showAllPlanes);
+  const prevVisibleCount = useRef(0);
   
   // Get the currently visible aircraft based on filters
   const visibleAircraft = useMemo(() => {
@@ -368,15 +369,17 @@ function FitBounds({ mapRef }: FitBoundsProps) {
     if (!hasInitiallyFit.current && aircraft.length > 0) {
       fitToVisibleAircraft();
       hasInitiallyFit.current = true;
-    } else if (hasInitiallyFit.current && visibleAircraft.length === 0 && !showAllPlanes) {
-      // Zoom back to airfield when no club planes visible
+    } else if (hasInitiallyFit.current && visibleAircraft.length === 0 && prevVisibleCount.current > 0 && !showAllPlanes) {
+      // Zoom back to airfield only on the TRANSITION to no visible club planes.
+      // Re-fitting on every update would fight the user's manual zoom/pan.
       fitToVisibleAircraft();
     } else if (hasInitiallyFit.current && !prevShowAllPlanes.current && showAllPlanes) {
       // Zoom to fit all planes when "Vis alle fly" is toggled on
       fitToVisibleAircraft();
     }
-    
-    // Update previous showAllPlanes state
+
+    // Update previous state
+    prevVisibleCount.current = visibleAircraft.length;
     prevShowAllPlanes.current = showAllPlanes;
   }, [fitToVisibleAircraft, visibleAircraft.length, showAllPlanes, aircraft.length]);
   

@@ -2,6 +2,7 @@
 
 import type { LiveAircraft } from "@/types/live-map"
 import { AircraftCard } from "@/components/livemap/aircraft-card"
+import { VehicleCard } from "@/components/livemap/vehicle-card"
 import { Input } from "@/components/ui/input"
 import { useState, useRef, useEffect } from "react"
 import { useAircraft } from "@/contexts/aircraft-context"
@@ -23,7 +24,9 @@ export function AircraftPanel() {
     showAdsb,
     clubPlanes,
     isClubPlane,
-    isFlying
+    isFlying,
+    vehicles,
+    startbord
   } = useAircraft()
   const isMobile = useIsMobile()
   const aircraftListRef = useRef<HTMLDivElement>(null)
@@ -43,12 +46,18 @@ export function AircraftPanel() {
     .filter(ac => showAllPlanes || isClubPlane(ac.registration))
     .filter(ac => !showOnlyFlying || isFlying(ac))
     .filter(ac => 
-      searchQuery.trim() === "" || 
+      searchQuery.trim() === "" ||
       ac.registration.toLowerCase().includes(searchQuery.toLowerCase()) ||
       ac.type.toLowerCase().includes(searchQuery.toLowerCase()) ||
       ac.pilot.toLowerCase().includes(searchQuery.toLowerCase())
     )
-  
+
+  // Ground vehicles also respect the search box
+  const filteredVehicles = vehicles.filter(v =>
+    searchQuery.trim() === "" ||
+    v.name.toLowerCase().includes(searchQuery.toLowerCase())
+  )
+
   // Scroll to selected aircraft when it changes
   useEffect(() => {
     if (selectedAircraft && selectedCardRef.current && aircraftListRef.current) {
@@ -89,7 +98,7 @@ export function AircraftPanel() {
         ref={aircraftListRef}
         className="flex-1 overflow-y-auto px-3 py-2"
       >
-        {filteredAircraft.length === 0 ? (
+        {filteredAircraft.length === 0 && filteredVehicles.length === 0 ? (
           searchQuery.trim() !== "" ? (
             <p className="text-muted-foreground text-lg p-3 text-center">Ingen resultater for "{searchQuery}"</p>
           ) : (
@@ -98,7 +107,7 @@ export function AircraftPanel() {
         ) : (
           <div className="space-y-2 pb-3">
             {filteredAircraft.map((ac) => (
-              <div 
+              <div
                 key={ac.id}
                 ref={selectedAircraft?.id === ac.id ? selectedCardRef : null}
               >
@@ -111,6 +120,21 @@ export function AircraftPanel() {
                 />
               </div>
             ))}
+
+            {filteredVehicles.length > 0 && (
+              <>
+                <p className="text-sm font-semibold text-muted-foreground uppercase tracking-wide px-1 pt-2">
+                  Køretøjer
+                </p>
+                {filteredVehicles.map((vehicle) => (
+                  <VehicleCard
+                    key={vehicle.ogn_id}
+                    vehicle={vehicle}
+                    startbord={startbord}
+                  />
+                ))}
+              </>
+            )}
           </div>
         )}
         
