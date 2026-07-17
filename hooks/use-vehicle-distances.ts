@@ -35,7 +35,9 @@ const OFFLINE_AFTER_MS = 10 * 60 * 1000
 // Feeds the startliste vehicle distance widget without subscribing to the full
 // plane-tracker firehose: uses the targeted subscribe_aircraft →
 // tracked_aircraft_update path plus the startbord_position channel broadcasts.
-export function useVehicleDistances() {
+// Pass active=false to disable entirely (no fetches, no subscriptions) — the
+// widget only runs on the startbord tablet itself.
+export function useVehicleDistances(active: boolean = true) {
   const { socketRef, wsConnected } = useStartliste()
   const [enabled, setEnabled] = useState(false)
   const [vehicles, setVehicles] = useState<RegistryVehicle[]>([])
@@ -45,6 +47,7 @@ export function useVehicleDistances() {
 
   // Fetch registry + admin flag + startbord seed
   useEffect(() => {
+    if (!active) return
     const fetchData = async () => {
       try {
         const [vehiclesRes, startbordRes] = await Promise.all([
@@ -76,12 +79,12 @@ export function useVehicleDistances() {
     }
 
     fetchData()
-  }, [])
+  }, [active])
 
   // Subscribe to the vehicles' tracker IDs and consume position updates
   useEffect(() => {
     const socket = socketRef.current
-    if (!enabled || vehicles.length === 0 || !socket || socket.readyState !== WebSocket.OPEN) return
+    if (!active || !enabled || vehicles.length === 0 || !socket || socket.readyState !== WebSocket.OPEN) return
 
     // The tracker matches raw beacon IDs, which may carry an FLR/OGN/ICA prefix
     const aircraftIds = vehicles.flatMap(v => [v.ogn_id, `FLR${v.ogn_id}`, `OGN${v.ogn_id}`, `ICA${v.ogn_id}`])
@@ -128,14 +131,14 @@ export function useVehicleDistances() {
         socket.send(JSON.stringify({ type: 'unsubscribe_aircraft', aircraft_ids: aircraftIds }))
       }
     }
-  }, [enabled, vehicles, socketRef, wsConnected])
+  }, [active, enabled, vehicles, socketRef, wsConnected])
 
   // Periodic re-render so distances go stale/offline without new messages
   useEffect(() => {
-    if (!enabled) return
+    if (!active || !enabled) return
     const interval = setInterval(() => setTick(t => t + 1), 60000)
     return () => clearInterval(interval)
-  }, [enabled])
+  }, [active, enabled])
 
   const distances: VehicleDistance[] = useMemo(() => {
     return vehicles.map(vehicle => {
@@ -160,8 +163,8 @@ export function useVehicleDistances() {
   }, [vehicles, positions, startbord])
 
   return {
-    // Only show the widget when the club has enabled it and there's a startbord to measure from
-    show: enabled && vehicles.length > 0 && startbord !== null,
+    // Only show the widget when active, the club has enabled it and there's a startbord to measure from
+    show: active && enabled && vehicles.length > 0 && startbord !== null,
     distances,
     // Compass heading of the startbord tablet (null while calibrating / unknown)
     startbordHeading: startbord?.heading ?? null

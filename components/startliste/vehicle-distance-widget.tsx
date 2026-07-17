@@ -9,15 +9,13 @@ import { formatDistance } from "@/lib/geo-utils"
 import { isStartbordActive, STARTBORD_ACTIVE_EVENT } from "@/lib/startbord"
 
 // Compact badges showing the distance + direction from the startbord to each
-// ground vehicle (e.g. "Wirehenter ↗ 850 m"). Only rendered when the club
-// admin has enabled it and a startbord tablet is active; the livemap shows
-// distances regardless of this widget.
+// ground vehicle (e.g. "Wirehenter ↗ 850 m"). ONLY rendered on the startbord
+// tablet itself (and only when the club admin has enabled it) — every other
+// tablet sees vehicle distances on the livemap instead.
 export function VehicleDistanceWidget() {
-  const { show, distances, startbordHeading } = useVehicleDistances()
   const [isThisTabletStartbord, setIsThisTabletStartbord] = useState(false)
+  const { show, distances, startbordHeading } = useVehicleDistances(isThisTabletStartbord)
 
-  // On the startbord tablet itself we know which way the tablet faces, so the
-  // arrow can point physically toward the vehicle instead of relative to north
   useEffect(() => {
     setIsThisTabletStartbord(isStartbordActive())
     const handleActiveChanged = () => setIsThisTabletStartbord(isStartbordActive())
@@ -25,13 +23,16 @@ export function VehicleDistanceWidget() {
     return () => window.removeEventListener(STARTBORD_ACTIVE_EVENT, handleActiveChanged)
   }, [])
 
-  if (!show) return null
+  if (!isThisTabletStartbord || !show) return null
 
+  // This tablet is the startbord, so we know which way it faces: rotate the
+  // arrow relative to the tablet's heading so it physically points toward the
+  // vehicle. Falls back to north-referenced while the compass is calibrating.
   const arrowRotation = (bearingDeg: number): number => {
-    if (isThisTabletStartbord && startbordHeading != null) {
+    if (startbordHeading != null) {
       return (bearingDeg - startbordHeading + 360) % 360
     }
-    return bearingDeg // north-referenced, like the map
+    return bearingDeg
   }
 
   return (

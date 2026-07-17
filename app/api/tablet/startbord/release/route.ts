@@ -5,10 +5,14 @@ import { JWTPayload } from '@/lib/jwt';
 import { z } from 'zod';
 
 const releaseSchema = z.object({
-  deviceId: z.string().uuid('deviceId must be a UUID')
+  deviceId: z.string().uuid('deviceId must be a UUID'),
+  // Force-release lets ANY tablet clear the claim (e.g. the startbord iPad is
+  // dead or gone) so no tablet is startbord
+  force: z.boolean().optional()
 });
 
-// POST handler to release the startbord role. Only the claiming device can release.
+// POST handler to release the startbord role. The claiming device can always
+// release; other devices can release with force: true.
 export async function POST(request: NextRequest): Promise<NextResponse> {
   try {
     const jwtPayloadString = request.headers.get('x-jwt-payload');
@@ -24,7 +28,7 @@ export async function POST(request: NextRequest): Promise<NextResponse> {
     }
 
     const body = await request.json();
-    const { deviceId } = releaseSchema.parse(body);
+    const { deviceId, force } = releaseSchema.parse(body);
 
     const claim = await prisma.startbordClaim.findUnique({
       where: { clubId_airfield: { clubId, airfield } }
@@ -34,8 +38,8 @@ export async function POST(request: NextRequest): Promise<NextResponse> {
       return NextResponse.json({ success: true, released: false });
     }
 
-    if (claim.deviceId !== deviceId) {
-      // Another tablet has taken over; nothing to release for this device
+    if (claim.deviceId !== deviceId && !force) {
+      // Another tablet holds the claim; nothing to release for this device
       return NextResponse.json({ success: true, released: false });
     }
 

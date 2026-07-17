@@ -46,6 +46,13 @@ export function StartbordBeaconRunner() {
             title: "Startbord overtaget",
             description: "En anden tablet er nu startbord.",
           })
+        } else if (message.type === 'startbord_removed' && isStartbordActive()) {
+          // Another tablet force-disabled the startbord role
+          setStartbordActive(false)
+          toast({
+            title: "Startbord deaktiveret",
+            description: "Startbord blev deaktiveret fra en anden tablet.",
+          })
         }
       } catch {
         // Not JSON we care about

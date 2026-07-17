@@ -3,7 +3,8 @@
 import { useState, useEffect } from "react"
 import { Label } from "@/components/ui/label"
 import { Switch } from "@/components/ui/switch"
-import { Loader2, MapPin } from "lucide-react"
+import { Button } from "@/components/ui/button"
+import { Loader2, MapPin, MapPinOff } from "lucide-react"
 import { useToast } from "@/components/ui/use-toast"
 import {
   getStartbordDeviceId,
@@ -124,14 +125,17 @@ export function StartbordSetting() {
           description: "Denne tablet sender nu sin placering til live kortet.",
         })
       } else {
+        // Clear the local flag first so our own startbord_removed broadcast
+        // isn't mistaken for a takeover by the beacon runner
+        setStartbordActive(false)
+        setEnabled(false)
+
         await fetch('/api/tablet/startbord/release', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({ deviceId })
         })
 
-        setStartbordActive(false)
-        setEnabled(false)
         toast({
           title: "Startbord deaktiveret",
           description: "Denne tablet sender ikke længere sin placering.",
@@ -152,6 +156,34 @@ export function StartbordSetting() {
     }
   }
 
+  // Force-release so NO tablet is startbord (e.g. the claiming iPad is gone).
+  // Clears the marker + distances from every tablet's livemap.
+  const handleForceDisable = async () => {
+    if (isWorking) return
+    setIsWorking(true)
+    try {
+      await fetch('/api/tablet/startbord/release', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ deviceId: getStartbordDeviceId(), force: true })
+      })
+      setOtherTabletClaims(false)
+      toast({
+        title: "Startbord deaktiveret",
+        description: "Ingen tablet er nu startbord.",
+      })
+    } catch (error) {
+      console.error('Error force-disabling startbord:', error)
+      toast({
+        title: "Kunne ikke deaktivere startbord",
+        description: "Prøv igen.",
+        variant: "destructive",
+      })
+    } finally {
+      setIsWorking(false)
+    }
+  }
+
   return (
     <div className="flex items-center justify-between mt-4">
       <div className="space-y-0.5">
@@ -163,9 +195,21 @@ export function StartbordSetting() {
           Denne tablet står ved startbordet og deler sin placering og retning på live kortet
         </p>
         {otherTabletClaims && !enabled && (
-          <p className="text-sm text-amber-600">
-            En anden tablet er i øjeblikket startbord. Aktivering her overtager rollen.
-          </p>
+          <>
+            <p className="text-sm text-amber-600">
+              En anden tablet er i øjeblikket startbord. Aktivering her overtager rollen.
+            </p>
+            <Button
+              variant="outline"
+              size="sm"
+              className="mt-1"
+              disabled={isWorking}
+              onClick={handleForceDisable}
+            >
+              <MapPinOff className="h-4 w-4 mr-2" />
+              Deaktiver startbord
+            </Button>
+          </>
         )}
       </div>
       <div className="w-[44px] h-[24px] flex items-center justify-center">
