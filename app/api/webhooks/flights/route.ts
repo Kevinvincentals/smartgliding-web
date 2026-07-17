@@ -59,13 +59,25 @@ export async function POST(request: Request) {
     if (payload.type === 'testhook') {
       return handleTestHook(payload);
     } else if (['takeoff', 'landing', 'udtakeoff', 'udlanding'].includes(payload.type)) {
+      // Trackers mounted on registered ground vehicles (winch, retrieve car, ...)
+      // must never create startlist flights or takeoff/landing notifications —
+      // their "events" are just the vehicle driving. Backstop for the OGN
+      // backend's own skip, which lags up to 30 min after a vehicle is registered.
+      const vehicle = await findGroundVehicleByOgnId(payload.id);
+      if (vehicle) {
+        return NextResponse.json({
+          success: true,
+          message: `Event ignored: ${payload.id} is a registered ground vehicle`
+        });
+      }
+
       // Broadcast the webhook event to WebSocket clients with basic info first
       broadcastToClients({
         type: 'webhook',
         event: payload.type,
         data: payload
       }, payload.airfield);
-      
+
       return handleFlightEvent(payload as z.infer<typeof flightEventSchema>);
     }
 
@@ -237,9 +249,18 @@ async function getPrivatePlaneAssignment(planeId: string | undefined, clubId: st
   }
 }
 
+// Look up a registered ground vehicle by (possibly FLR/OGN/ICA-prefixed) device ID
+async function findGroundVehicleByOgnId(deviceId: string) {
+  const normalizedId = deviceId.trim().toUpperCase().replace(/^(FLR|OGN|ICA)/, '');
+  return prisma.groundVehicle.findFirst({
+    where: { ogn_id: normalizedId },
+    select: { id: true, name: true }
+  });
+}
+
 async function handleFlightEvent(payload: z.infer<typeof flightEventSchema>) {
   const { type, id: flarmId, airfield } = payload;
-  
+
   // Look up plane information in our database
   const plane = await prisma.plane.findFirst({
     where: { flarm_id: flarmId },
