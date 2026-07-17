@@ -6,6 +6,7 @@ import { Badge } from "@/components/ui/badge"
 import { useStartliste } from "@/contexts/startlist-context"
 import { AddFlightDialog } from "@/components/flights/add-flight-dialog"
 import { ChangeAirfieldDialog } from "@/components/dialogs/change-airfield-dialog"
+import { VehicleDistanceWidget } from "@/components/startliste/vehicle-distance-widget"
 import { useIsMobile } from "@/hooks/use-mobile"
 import { cn } from "@/lib/utils"
 
@@ -299,9 +300,9 @@ export function StartlisteHeader({
           
           {/* Traffic alert badge */}
           {tcasAlert && tcasAlert.type === 'landing_incursion' && (
-            <Badge 
+            <Badge
               className={`
-                bg-orange-100 hover:bg-orange-100 text-orange-800 border border-orange-300 
+                bg-orange-100 hover:bg-orange-100 text-orange-800 border border-orange-300
                 px-3 py-1.5 text-sm font-medium whitespace-nowrap
                 ${tcasAlert.severity === 'high' ? 'animate-pulse bg-red-100 text-red-800 border-red-300' : ''}
               `}
@@ -309,6 +310,9 @@ export function StartlisteHeader({
               Trafik! {formatAircraftRegistrations(tcasAlert.aircraft)}
             </Badge>
           )}
+
+          {/* Ground vehicle distances (gated by club admin setting) */}
+          <VehicleDistanceWidget />
         </div>
         
         <div className="flex flex-col">

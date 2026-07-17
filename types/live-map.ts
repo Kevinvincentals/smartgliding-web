@@ -57,6 +57,40 @@ export interface LiveAircraft {
 }
 
 /**
+ * Live ground vehicle (winch, retrieve car, ...) tracked via an OGN tracker
+ */
+export interface LiveVehicle {
+  /** Raw tracker ID as received from OGN (e.g. "OGN3E5C12") */
+  id: string
+  /** Normalized OGN device ID (no FLR/OGN/ICA prefix, uppercase) */
+  ogn_id: string
+  /** Vehicle name from the club registry (e.g. "Wirehenter") */
+  name: string
+  /** Icon key from lib/vehicle-icons.ts */
+  icon: string
+  latitude: number
+  longitude: number
+  /** Track over ground in degrees */
+  track: number
+  /** Ground speed in km/h */
+  speed: number
+  lastSeen: Date
+}
+
+/**
+ * Live position of the startbord tablet
+ */
+export interface StartbordState {
+  deviceId: string
+  latitude: number
+  longitude: number
+  /** Compass heading in degrees, null while the compass is calibrating */
+  heading: number | null
+  accuracy: number | null
+  updatedAt: Date
+}
+
+/**
  * Aircraft position update for real-time tracking
  */
 export interface AircraftPositionUpdate {

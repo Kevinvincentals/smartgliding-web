@@ -9,6 +9,7 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/com
 import { TrafficLeaderSetting } from "@/components/settings/traffic-leader-setting"
 import { TowPersonSetting } from "@/components/settings/tow-person-setting"
 import { DisplaySettings } from "@/components/settings/display-settings"
+import { StartbordSetting } from "@/components/settings/startbord-setting"
 import { useToast } from "@/components/ui/use-toast"
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
 import { Reports } from "@/components/settings/reports"
@@ -477,6 +478,8 @@ function Settings({ dailyInfo, currentAirfield }: SettingsProps = {}) {
                 setSchoolEnabled={setSchoolEnabled}
                 isLoading={initialLoading}
               />
+
+              <StartbordSetting />
 
               <div className="pt-4 border-t space-y-3">
                 <Button 

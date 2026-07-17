@@ -1,5 +1,6 @@
 generator client {
-  provider = "prisma-client-js"
+  provider      = "prisma-client-js"
+  binaryTargets = ["native", "windows", "debian-openssl-3.0.x"]
 }
 
 datasource db {
@@ -52,8 +53,11 @@ model Club {
   homefield          String? // Primary airfield for backward compatibility
   allowed_airfields  String[]             @default([]) // Array of airfield codes this club can operate at
   status             String               @default("active")
+  startbord_show_vehicle_distance Boolean @default(false) // Show vehicle distances on the startliste page (outside livemap)
   pilots             ClubPilot[]
   planes             Plane[]
+  groundVehicles     GroundVehicle[]
+  startbordClaims    StartbordClaim[]
   flightLogs         FlightLogbook[]      @relation("ClubFlights")
   dailyInfo          DailyInfo[]          @relation("ClubDailyInfo")
   dailyPrivatePlanes DailyPrivatePlanes[]
@@ -82,6 +86,7 @@ model Pilot {
   clubs                       ClubPilot[]
   createdClubs                Club[]                   @relation("ClubCreator")
   createdPlanes               Plane[]                  @relation("PlaneCreator")
+  createdGroundVehicles       GroundVehicle[]          @relation("GroundVehicleCreator")
   pilotFlights1               FlightLogbook[]          @relation("PilotOneFlights")
   pilotFlights2               FlightLogbook[]          @relation("PilotTwoFlights")
   trafficLeadingDays          DailyInfo[]              @relation("TrafficLeader")
@@ -135,6 +140,40 @@ model Plane {
   updatedAt          DateTime             @updatedAt
 
   @@map("planes")
+}
+
+model GroundVehicle {
+  id          String   @id @default(auto()) @map("_id") @db.ObjectId
+  name        String // e.g. "Spil", "Wirehenter"
+  icon        String   @default("car") // key from lib/vehicle-icons.ts
+  ogn_id      String // normalized uppercase hex device ID, no FLR/OGN/ICA prefix
+  club        Club     @relation(fields: [clubId], references: [id], onDelete: Cascade)
+  clubId      String   @db.ObjectId
+  createdBy   Pilot    @relation("GroundVehicleCreator", fields: [createdById], references: [id], onDelete: NoAction, onUpdate: NoAction)
+  createdById String   @db.ObjectId
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  @@unique([clubId, ogn_id])
+  @@map("ground_vehicles")
+}
+
+model StartbordClaim {
+  id                String    @id @default(auto()) @map("_id") @db.ObjectId
+  club              Club      @relation(fields: [clubId], references: [id], onDelete: Cascade)
+  clubId            String    @db.ObjectId
+  airfield          String // airfield code, e.g. "EKFS"
+  deviceId          String // tablet-generated UUID
+  claimedAt         DateTime  @default(now())
+  latitude          Float?
+  longitude         Float?
+  heading           Float?
+  accuracy          Float?
+  positionUpdatedAt DateTime?
+  updatedAt         DateTime  @updatedAt
+
+  @@unique([clubId, airfield])
+  @@map("startbord_claims")
 }
 
 model FlightLogbook {

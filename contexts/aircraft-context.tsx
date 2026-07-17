@@ -1,8 +1,9 @@
 "use client"
 
 import React, { createContext, useState, useContext, useEffect, useCallback, useRef } from "react"
-import { LiveAircraft } from "@/types/live-map"
+import { LiveAircraft, LiveVehicle, StartbordState } from "@/types/live-map"
 import { processAircraftData, subscribePlaneTracker, unsubscribePlaneTracker, setAdsbPreference } from "@/lib/websocket"
+import { normalizeOgnId } from "@/lib/vehicle-icons"
 
 // Define the flight track data interfaces
 interface FlightTrackPoint {
@@ -26,6 +27,14 @@ interface FlightTrackData {
 interface ClubPlanesMap {
   [registration: string]: boolean
 }
+
+// Registered ground vehicles keyed by normalized OGN ID
+interface VehicleRegistryEntry {
+  id: string
+  name: string
+  icon: string
+}
+type VehicleRegistry = Map<string, VehicleRegistryEntry>
 
 interface AircraftContextType {
   aircraft: LiveAircraft[]
@@ -54,6 +63,10 @@ interface AircraftContextType {
   clubPlanes: ClubPlanesMap
   isClubPlane: (registration: string) => boolean
   isFlying: (aircraft: LiveAircraft) => boolean
+  // Ground vehicles + startbord position
+  vehicles: LiveVehicle[]
+  startbord: StartbordState | null
+  showVehicleDistanceOutsideMap: boolean
 }
 
 const AircraftContext = createContext<AircraftContextType | null>(null)
@@ -139,7 +152,13 @@ export function AircraftProvider({
   });
   
   const [clubPlanes, setClubPlanes] = useState<ClubPlanesMap>({});
-  
+
+  // Ground vehicles + startbord state
+  const [vehicles, setVehicles] = useState<LiveVehicle[]>([]);
+  const [startbord, setStartbord] = useState<StartbordState | null>(null);
+  const [showVehicleDistanceOutsideMap, setShowVehicleDistanceOutsideMap] = useState(false);
+  const vehicleRegistryRef = useRef<VehicleRegistry>(new Map());
+
   // Save showAllPlanes to localStorage when it changes
   useEffect(() => {
     if (typeof window !== 'undefined') {
@@ -263,6 +282,43 @@ export function AircraftProvider({
     }
   }, []);
 
+  // Ground vehicle helpers: registered vehicles are routed out of the aircraft
+  // list into their own state, so aircraft panels/counters stay untouched.
+  const isVehicleData = useCallback((data: any): boolean => {
+    if (data?.is_ground_vehicle === true) return true;
+    const rawId = data?.id != null ? String(data.id) : '';
+    return rawId !== '' && vehicleRegistryRef.current.has(normalizeOgnId(rawId));
+  }, []);
+
+  const toLiveVehicle = useCallback((data: any): LiveVehicle => {
+    const rawId = String(data.id);
+    const ognId = normalizeOgnId(rawId);
+    const registryEntry = vehicleRegistryRef.current.get(ognId);
+    return {
+      id: rawId,
+      ogn_id: ognId,
+      name: registryEntry?.name || data.registration || `Køretøj ${ognId}`,
+      icon: registryEntry?.icon || data.vehicle_icon || 'car',
+      latitude: data.latitude,
+      longitude: data.longitude,
+      track: data.track ?? 0,
+      speed: data.ground_speed ?? 0,
+      lastSeen: data.last_seen ? new Date(data.last_seen) : new Date()
+    };
+  }, []);
+
+  const upsertVehicles = useCallback((vehicleData: any[]) => {
+    if (vehicleData.length === 0) return;
+    setVehicles(prev => {
+      const vehicleMap = new Map(prev.map(v => [v.ogn_id, v]));
+      vehicleData.forEach(data => {
+        const vehicle = toLiveVehicle(data);
+        vehicleMap.set(vehicle.ogn_id, vehicle);
+      });
+      return Array.from(vehicleMap.values());
+    });
+  }, [toLiveVehicle]);
+
   // Handle incoming WebSocket messages
   const handleWebSocketMessage = useCallback((event: MessageEvent) => {
     const data = event.data;
@@ -279,8 +335,14 @@ export function AircraftProvider({
           setIsConnected(true);
           setConnectionStatus('connected');
 
+          // Split ground vehicles out of the aircraft snapshot
+          const vehicleData = jsonData.data.filter(isVehicleData);
+          const aircraftData = jsonData.data.filter((d: any) => !isVehicleData(d));
+
+          setVehicles(vehicleData.map(toLiveVehicle));
+
           // Convert aircraft data
-          const convertedAircraft = jsonData.data.map(processAircraftData);
+          const convertedAircraft = aircraftData.map(processAircraftData);
           setAircraft(convertedAircraft);
         }
         // Handle ADSB aircraft data
@@ -307,8 +369,14 @@ export function AircraftProvider({
           setIsConnected(true);
           setConnectionStatus('connected');
 
+          // Split ground vehicles out of the batch
+          const vehicleData = jsonData.data.filter(isVehicleData);
+          upsertVehicles(vehicleData);
+
           // Process all aircraft updates in the batch
-          const updatedAircraftData: LiveAircraft[] = jsonData.data.map(processAircraftData);
+          const updatedAircraftData: LiveAircraft[] = jsonData.data
+            .filter((d: any) => !isVehicleData(d))
+            .map(processAircraftData);
 
           setAircraft(prev => {
             // Create a map of the current aircraft for faster lookup
@@ -338,6 +406,11 @@ export function AircraftProvider({
         else if (jsonData.type === 'aircraft_update' && jsonData.data) {
           setIsConnected(true);
           setConnectionStatus('connected');
+
+          if (isVehicleData(jsonData.data)) {
+            upsertVehicles([jsonData.data]);
+            return;
+          }
 
           const updatedAircraft = processAircraftData(jsonData.data);
 
@@ -395,7 +468,11 @@ export function AircraftProvider({
           
           const aircraftId = jsonData.data.id;
           setAircraft(prev => prev.filter(a => a.id !== aircraftId));
-          
+
+          // Also remove from vehicles if it was a ground vehicle
+          const removedOgnId = normalizeOgnId(String(aircraftId));
+          setVehicles(prev => prev.filter(v => v.ogn_id !== removedOgnId));
+
           // Clear selection if the removed aircraft was selected
           if (selectedAircraftRef.current?.id === aircraftId) {
             setSelectedAircraft(null);
@@ -413,6 +490,20 @@ export function AircraftProvider({
           if (selectedAircraftRef.current?.id === aircraftId) {
             setSelectedAircraft(null);
           }
+        }
+        // Startbord tablet position updates (broadcast on the airfield channel)
+        else if (jsonData.type === 'startbord_position') {
+          setStartbord({
+            deviceId: jsonData.deviceId,
+            latitude: jsonData.latitude,
+            longitude: jsonData.longitude,
+            heading: jsonData.heading ?? null,
+            accuracy: jsonData.accuracy ?? null,
+            updatedAt: jsonData.timestamp ? new Date(jsonData.timestamp) : new Date()
+          });
+        }
+        else if (jsonData.type === 'startbord_removed') {
+          setStartbord(null);
         }
         // Handle connection status
         else if (jsonData.type === 'connection') {
@@ -436,13 +527,16 @@ export function AircraftProvider({
       setConnectionStatus('error');
     }
   }, [
-    providerId, 
-    setAircraft, 
-    setConnectionStatus, 
-    setIsConnected, 
-    setLastMessage, 
-    setLastMessageTime, 
-    setSelectedAircraft 
+    providerId,
+    setAircraft,
+    setConnectionStatus,
+    setIsConnected,
+    setLastMessage,
+    setLastMessageTime,
+    setSelectedAircraft,
+    isVehicleData,
+    toLiveVehicle,
+    upsertVehicles
     // selectedAircraft is removed, selectedAircraftRef.current is used instead
     // hasSubscribed.current is a ref, so it doesn't need to be in dependencies
   ]);
@@ -570,6 +664,52 @@ export function AircraftProvider({
     fetchClubPlanes();
   }, [providerId]);
 
+  // Fetch the ground vehicle registry + seed the startbord position on mount
+  useEffect(() => {
+    const fetchVehicleRegistry = async () => {
+      try {
+        const response = await fetch('/api/tablet/fetch_vehicles');
+        if (response.ok) {
+          const data = await response.json();
+          if (data.success) {
+            const registry: VehicleRegistry = new Map();
+            (data.vehicles || []).forEach((v: any) => {
+              registry.set(normalizeOgnId(v.ogn_id), { id: v.id, name: v.name, icon: v.icon });
+            });
+            vehicleRegistryRef.current = registry;
+            setShowVehicleDistanceOutsideMap(data.showVehicleDistanceOutsideMap === true);
+          }
+        }
+      } catch (error) {
+        console.error(`[${providerId.current}] Error fetching vehicle registry:`, error);
+      }
+    };
+
+    const fetchStartbord = async () => {
+      try {
+        const response = await fetch('/api/tablet/startbord');
+        if (response.ok) {
+          const data = await response.json();
+          if (data.success && data.claim && data.claim.latitude != null && data.claim.longitude != null) {
+            setStartbord({
+              deviceId: data.claim.deviceId,
+              latitude: data.claim.latitude,
+              longitude: data.claim.longitude,
+              heading: data.claim.heading ?? null,
+              accuracy: data.claim.accuracy ?? null,
+              updatedAt: data.claim.positionUpdatedAt ? new Date(data.claim.positionUpdatedAt) : new Date()
+            });
+          }
+        }
+      } catch (error) {
+        console.error(`[${providerId.current}] Error fetching startbord claim:`, error);
+      }
+    };
+
+    fetchVehicleRegistry();
+    fetchStartbord();
+  }, [providerId]);
+
   // Helper function to check if an aircraft is a club plane
   const isClubPlane = useCallback((registration: string): boolean => {
     return clubPlanes[registration] === true;
@@ -673,7 +813,11 @@ export function AircraftProvider({
     setShowAdsb,
     clubPlanes,
     isClubPlane,
-    isFlying
+    isFlying,
+    // Ground vehicles + startbord (vehicles unseen for 10 min are considered offline)
+    vehicles: vehicles.filter(v => new Date().getTime() - v.lastSeen.getTime() < 10 * 60 * 1000),
+    startbord,
+    showVehicleDistanceOutsideMap
   }
 
   return (

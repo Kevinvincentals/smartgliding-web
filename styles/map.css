@@ -104,6 +104,62 @@
   box-shadow: 0 1px 2px rgba(0,0,0,0.1);
 }
 
+/* Ground vehicle marker */
+.marker-container.vehicle-marker,
+.marker-container.startbord-marker {
+  position: relative;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+}
+
+.vehicle-icon-badge {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 28px;
+  height: 28px;
+  border-radius: 50%;
+  background-color: #d97706; /* amber-600 */
+  border: 2px solid white;
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.4);
+}
+
+.callsign-box.vehicle-callsign,
+.callsign-box.startbord-callsign {
+  order: 2;
+  margin-top: 4px;
+  margin-bottom: 0;
+}
+
+/* Startbord tablet marker */
+.startbord-icon-badge {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 28px;
+  height: 28px;
+  border-radius: 50%;
+  background-color: #16a34a; /* green-600 */
+  border: 2px solid white;
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.4);
+}
+
+/* Rotating ring holding the heading arrow above the startbord badge */
+.startbord-heading-ring {
+  position: absolute;
+  top: -4px;
+  left: 50%;
+  margin-left: -22px;
+  width: 44px;
+  height: 44px;
+  display: flex;
+  justify-content: center;
+  align-items: flex-start;
+  transform-origin: center center;
+  pointer-events: none;
+}
+
 /* Active runway style */
 .active-runway {
   stroke-width: 3;

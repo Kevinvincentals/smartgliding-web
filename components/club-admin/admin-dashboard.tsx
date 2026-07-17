@@ -12,7 +12,8 @@ import {
   Shield,
   Clock,
   TrendingUp,
-  Timer
+  Timer,
+  Truck
 } from "lucide-react"
 import { Button } from "@/components/ui/button"
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
@@ -21,6 +22,8 @@ import { useToast } from "@/components/ui/use-toast"
 import { Badge } from "@/components/ui/badge"
 import { PilotManagement } from "./pilot-management"
 import { PlaneManagement } from "./plane-management"
+import { VehicleManagement } from "./vehicle-management"
+import { ClubSettings } from "./club-settings"
 
 interface AdminDashboardProps {
   adminInfo?: {
@@ -148,7 +151,7 @@ export function AdminDashboard({ adminInfo }: AdminDashboardProps) {
       {/* Main Content */}
       <div className="container mx-auto px-4 py-6">
         <Tabs value={activeTab} onValueChange={setActiveTab} className="space-y-6">
-          <TabsList className="grid w-full grid-cols-4">
+          <TabsList className="grid w-full grid-cols-5">
             <TabsTrigger value="overview" className="flex items-center">
               <BarChart3 className="h-4 w-4 mr-2" />
               Oversigt
@@ -160,6 +163,10 @@ export function AdminDashboard({ adminInfo }: AdminDashboardProps) {
             <TabsTrigger value="planes" className="flex items-center">
               <Plane className="h-4 w-4 mr-2" />
               Fly
+            </TabsTrigger>
+            <TabsTrigger value="vehicles" className="flex items-center">
+              <Truck className="h-4 w-4 mr-2" />
+              Køretøjer
             </TabsTrigger>
             <TabsTrigger value="settings" className="flex items-center">
               <Settings className="h-4 w-4 mr-2" />
@@ -279,23 +286,12 @@ export function AdminDashboard({ adminInfo }: AdminDashboardProps) {
             <PlaneManagement />
           </TabsContent>
 
+          <TabsContent value="vehicles" className="space-y-6">
+            <VehicleManagement />
+          </TabsContent>
+
           <TabsContent value="settings" className="space-y-6">
-            <Card>
-              <CardHeader>
-                <CardTitle>Klub Indstillinger</CardTitle>
-                <CardDescription>
-                  Konfigurer klub specifikke indstillinger og præferencer.
-                </CardDescription>
-              </CardHeader>
-              <CardContent>
-                <div className="text-center py-8">
-                  <Settings className="h-12 w-12 text-muted-foreground mx-auto mb-4" />
-                  <p className="text-muted-foreground">
-                    Indstillinger funktionalitet kommer snart...
-                  </p>
-                </div>
-              </CardContent>
-            </Card>
+            <ClubSettings />
           </TabsContent>
         </Tabs>
       </div>

@@ -3,7 +3,9 @@
 import React from "react"
 import { useEffect, useRef, useState, useCallback, useMemo } from "react"
 import { Plane, ZoomInIcon, PanelRightIcon, Timer } from "lucide-react"
-import type { LiveAircraft } from "@/types/live-map"
+import type { LiveAircraft, LiveVehicle, StartbordState } from "@/types/live-map"
+import { svgForVehicleIcon, svgForStartbordIcon } from "@/lib/vehicle-icons"
+import { haversineMeters, formatDistance } from "@/lib/geo-utils"
 import { MapContainer, TileLayer, Marker, Popup, useMap, ZoomControl, Polyline, Polygon } from "react-leaflet"
 import L from "leaflet"
 import "leaflet/dist/leaflet.css"
@@ -199,6 +201,76 @@ const AircraftMarker = ({
         markerRef.current = marker;
         if (marker) storeMarkerRef(aircraft.id, marker);
       }}
+    />
+  )
+}
+
+// Ground vehicle marker: circular badge with the vehicle's icon, name label and
+// (when the startbord position is known) the distance from the startbord.
+interface VehicleMarkerProps {
+  vehicle: LiveVehicle
+  distanceMeters: number | null
+}
+
+const VehicleMarker = ({ vehicle, distanceMeters }: VehicleMarkerProps) => {
+  const label = distanceMeters != null
+    ? `${vehicle.name} · ${formatDistance(distanceMeters)}`
+    : vehicle.name
+
+  const vehicleIcon = L.divIcon({
+    className: 'custom-plane-icon',
+    html: `
+      <div class="marker-container vehicle-marker">
+        <div class="vehicle-icon-badge">
+          ${svgForVehicleIcon(vehicle.icon, 18, 'white')}
+        </div>
+        <div class="callsign-box vehicle-callsign">${label}</div>
+      </div>`,
+    iconSize: [40, 40],
+    iconAnchor: [20, 20],
+  })
+
+  return (
+    <Marker
+      position={[vehicle.latitude, vehicle.longitude]}
+      icon={vehicleIcon}
+    />
+  )
+}
+
+// Startbord tablet marker: flag badge with an optional heading arrow and a
+// staleness hint when the position is old (tablet asleep / backgrounded).
+interface StartbordMarkerProps {
+  startbord: StartbordState
+}
+
+const StartbordMarker = ({ startbord }: StartbordMarkerProps) => {
+  const ageMinutes = Math.floor((Date.now() - new Date(startbord.updatedAt).getTime()) / 60000)
+  const label = ageMinutes >= 2 ? `Startbord · ${ageMinutes} min siden` : 'Startbord'
+
+  const startbordIcon = L.divIcon({
+    className: 'custom-plane-icon',
+    html: `
+      <div class="marker-container startbord-marker">
+        ${startbord.heading != null ? `
+          <div class="startbord-heading-ring" style="transform: rotate(${startbord.heading}deg);">
+            <svg xmlns="http://www.w3.org/2000/svg" width="10" height="8" viewBox="0 0 10 8">
+              <path d="M5 0 L10 8 L0 8 Z" fill="#16a34a" />
+            </svg>
+          </div>` : ''}
+        <div class="startbord-icon-badge">
+          ${svgForStartbordIcon(16, 'white')}
+        </div>
+        <div class="callsign-box startbord-callsign">${label}</div>
+      </div>`,
+    iconSize: [40, 40],
+    iconAnchor: [20, 20],
+  })
+
+  return (
+    <Marker
+      position={[startbord.latitude, startbord.longitude]}
+      icon={startbordIcon}
     />
   )
 }
@@ -587,7 +659,9 @@ function MapPlaceholder({ isLoading }: MapPlaceholderProps) {
     setShowAdsb,
     clubPlanes,
     isClubPlane,
-    isFlying
+    isFlying,
+    vehicles,
+    startbord
   } = useAircraft()
   const isMobile = useIsMobile()
   const hasSetIcons = useRef(false)
@@ -967,9 +1041,23 @@ function MapPlaceholder({ isLoading }: MapPlaceholderProps) {
             />
           ))}
         
+        {/* Ground vehicles (winch, retrieve car, ...) with distance from startbord */}
+        {vehicles.map((vehicle) => (
+          <VehicleMarker
+            key={`vehicle-${vehicle.ogn_id}`}
+            vehicle={vehicle}
+            distanceMeters={startbord
+              ? haversineMeters(startbord.latitude, startbord.longitude, vehicle.latitude, vehicle.longitude)
+              : null}
+          />
+        ))}
+
+        {/* Startbord tablet position */}
+        {startbord && <StartbordMarker startbord={startbord} />}
+
         {/* Add following component */}
         <FollowSelectedAircraft shouldFollow={isFollowing} />
-        
+
         <FitBounds mapRef={mapRef} />
       </MapContainer>
     </div>

@@ -2,6 +2,7 @@
 
 import { StartlisteHeader } from "./components/header"
 import { StartlisteProvider } from "@/contexts/startlist-context"
+import { StartbordBeaconRunner } from "@/components/startliste/startbord-beacon-runner"
 
 export default function StartlisteLayout({
   children,
@@ -10,6 +11,7 @@ export default function StartlisteLayout({
 }) {
   return (
     <StartlisteProvider>
+      <StartbordBeaconRunner />
       <div className="flex min-h-screen w-full flex-col bg-background pt-3 sm:pt-0">
         {children}
       </div>
