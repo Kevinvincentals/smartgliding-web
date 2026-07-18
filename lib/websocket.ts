@@ -107,7 +107,8 @@ export function processAircraftData(data: any): LiveAircraft {
     lastSeen: createDateFromTimestamp(data.last_seen, false), // Pass false for OGN/FLARM
     turnRate: data.turn_rate,
     climb_rate_30s_avg: data.climb_rate_30s_avg,
-    climb_rate_60s_avg: data.climb_rate_60s_avg
+    climb_rate_60s_avg: data.climb_rate_60s_avg,
+    receiver: data.receiver
   };
 }
 

@@ -322,7 +322,8 @@ export function AircraftProvider({
       longitude: data.longitude,
       track: data.track ?? 0,
       speed: (data.ground_speed ?? 0) * 1.852, // OGN feed is in knots, LiveVehicle.speed is km/h
-      lastSeen: data.last_seen ? new Date(data.last_seen) : new Date()
+      lastSeen: data.last_seen ? new Date(data.last_seen) : new Date(),
+      receiver: data.receiver
     };
   }, []);
 

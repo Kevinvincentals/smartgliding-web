@@ -85,6 +85,11 @@ export function VehicleCard({ vehicle, startbord, onSelect }: VehicleCardProps) 
             <span className="ml-3 px-2 py-1 text-sm font-medium bg-amber-100 text-amber-800 rounded-md">
               Køretøj
             </span>
+            {vehicle.receiver && (
+              <span className="ml-2 text-xs text-gray-400" title="OGN modtager (ground station)">
+                {vehicle.receiver}
+              </span>
+            )}
           </div>
         </div>
       </div>

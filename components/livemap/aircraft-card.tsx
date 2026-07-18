@@ -223,6 +223,11 @@ export function AircraftCard({ aircraft, isSelected, onSelect, getFlyingTime, is
                   </TooltipContent>
                 </Tooltip>
               )}
+              {aircraft.receiver && (
+                <span className="text-xs text-gray-400 self-center" title="OGN modtager (ground station)">
+                  {aircraft.receiver}
+                </span>
+              )}
             </div>
           </div>
         </div>

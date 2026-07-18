@@ -54,6 +54,8 @@ export interface LiveAircraft {
   climb_rate_60s_avg?: number | null
   /** Flight start time from tracker */
   flightStartTime?: Date
+  /** OGN ground station (receiver) that heard the latest beacon, e.g. "EKFS-ESP3" */
+  receiver?: string
 }
 
 /**
@@ -75,6 +77,8 @@ export interface LiveVehicle {
   /** Ground speed in km/h */
   speed: number
   lastSeen: Date
+  /** OGN ground station (receiver) that heard the latest beacon */
+  receiver?: string
 }
 
 /**
